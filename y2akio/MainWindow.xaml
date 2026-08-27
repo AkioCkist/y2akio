@@ -1,0 +1,157 @@
+﻿<Window
+    x:Class="y2akio.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:y2akio"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="y2akio">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop Kind="BaseAlt"/>
+    </Window.SystemBackdrop>
+
+    <ScrollViewer RequestedTheme="Dark" Padding="24,32">
+        <!-- Tăng MaxWidth lên 1200 để giao diện rộng rãi hơn -->
+        <StackPanel MaxWidth="1200" Spacing="20" HorizontalAlignment="Stretch">
+
+            <!-- Header Section -->
+            <StackPanel HorizontalAlignment="Center" Spacing="8" Margin="0,12,0,12">
+                <TextBlock Text="Y2MATE ARTISAN" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center">
+                    <TextBlock Text="Media downloader powered by yt-dlp" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                    <Button Content="Settings" CornerRadius="16" Style="{StaticResource DefaultButtonStyle}"/>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- URL Input Box -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
+                    BorderThickness="1" CornerRadius="8" Padding="12">
+                <Grid ColumnDefinitions="*, Auto" ColumnSpacing="12">
+                    <TextBox x:Name="UrlTextBox" 
+                             PlaceholderText="Paste YouTube (or other site) link here..." 
+                             VerticalAlignment="Center" Height="36"/>
+                    <Button x:Name="AnalyzeButton" Grid.Column="1" 
+                            Content="Analyze" Height="36" Width="100" 
+                            Style="{StaticResource AccentButtonStyle}" 
+                            Click="AnalyzeButton_Click"/>
+                </Grid>
+            </Border>
+
+            <!-- Expanded Options Box (Hidden by default) -->
+            <Border x:Name="OptionsPanel" Visibility="Collapsed" 
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
+                    BorderThickness="1" CornerRadius="8" Padding="20">
+                <!-- Chia tỉ lệ 1:1 cho 2 cột để không bị hẹp -->
+                <Grid ColumnDefinitions="*, *" ColumnSpacing="24">
+
+                    <!-- Left: Video Info -->
+                    <StackPanel Spacing="12">
+                        <!-- Đoạn đã sửa -->
+                        <Grid CornerRadius="8">
+                            <Image x:Name="ThumbnailImage" 
+                               Stretch="UniformToFill" 
+                               MaxHeight="280" 
+                               Source="ms-appx:///Assets/placeholder.png"/>
+                        </Grid>
+                        <TextBlock x:Name="VideoTitle" Text="Video Title" FontWeight="SemiBold" FontSize="18" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="ChannelName" Text="Channel Name" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+
+                    <!-- Right: Download Options -->
+                    <StackPanel Grid.Column="1" Spacing="16">
+                        <TextBlock Text="Download Options" FontWeight="SemiBold" FontSize="16"/>
+
+                        <!-- Format Toggle Segment Control -->
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="File Format" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <Grid ColumnDefinitions="*, *" Background="{ThemeResource ControlAltFillColorSecondaryBrush}" CornerRadius="6" Padding="3">
+                                <RadioButton Content="Video (MP4)" IsChecked="True" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" GroupName="FormatType"/>
+                                <RadioButton Grid.Column="1" Content="Audio (Music)" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" GroupName="FormatType"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Quality & Format Dropdowns -->
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Quality / Format" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <ComboBox HorizontalAlignment="Stretch" SelectedIndex="0">
+                                <ComboBoxItem Content="Best Quality"/>
+                                <ComboBoxItem Content="1080p (HD)"/>
+                                <ComboBoxItem Content="720p"/>
+                            </ComboBox>
+                        </StackPanel>
+
+                        <!-- Save Location -->
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Save Location" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <Grid ColumnDefinitions="*, Auto" ColumnSpacing="8">
+                                <TextBox x:Name="SaveLocationBox" Text="C:\Users\Downloads" IsReadOnly="True" Height="36"/>
+                                <Button Grid.Column="1" Content="Choose Folder" Click="ChooseFolder_Click" Height="36"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Extra Options -->
+                        <CheckBox Content="Embed full Metadata (Title, Artist...)" IsChecked="True"/>
+
+                        <!-- Download Button chuẩn Accent của Windows -->
+                        <Button Content="Download Now" HorizontalAlignment="Stretch" Height="40" 
+                                Style="{StaticResource AccentButtonStyle}" 
+                                FontWeight="SemiBold" Click="DownloadButton_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Download History Section -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
+                    BorderThickness="1" CornerRadius="8" Padding="20">
+                <StackPanel Spacing="16">
+                    <Grid>
+                        <TextBlock Text="Download History" FontWeight="SemiBold" FontSize="18" VerticalAlignment="Center"/>
+                        <Button Content="Clear All" HorizontalAlignment="Right" Style="{StaticResource SubtleButtonStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </Grid>
+
+                    <ListView x:Name="HistoryList" SelectionMode="None">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="local:DownloadItem">
+                                <!-- History Item Component -->
+                                <Border Background="{ThemeResource ControlFillColorDefaultBrush}" 
+                                        CornerRadius="6" Padding="12" Margin="0,0,0,8" 
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                                    <Grid ColumnDefinitions="Auto, *, Auto" ColumnSpacing="12">
+                                        <!-- Icon Fluent -->
+                                        <Border Width="36" Height="36" CornerRadius="6" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                            <FontIcon Glyph="&#xE116;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                        </Border>
+
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Title}" FontWeight="Medium"/>
+                                            <TextBlock Text="{Binding Details}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        </StackPanel>
+
+                                        <!-- Action Buttons Fluent Standard -->
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                            <Button Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="Play">
+                                                <FontIcon Glyph="&#xE768;" FontSize="14"/>
+                                            </Button>
+                                            <Button Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="Open Folder">
+                                                <FontIcon Glyph="&#xE8DA;" FontSize="14"/>
+                                            </Button>
+                                            <Button Style="{StaticResource StandardButtonStyle}" ToolTipService.ToolTip="Delete">
+                                                <FontIcon Glyph="&#xE74D;" FontSize="14" Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</Window>
