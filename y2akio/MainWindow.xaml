@@ -18,7 +18,7 @@
 
         <!-- Custom title bar -->
         <Grid x:Name="AppTitleBar" Grid.Row="0" Background="Transparent">
-            <TextBlock Text="YT-DLP MEDIA DOWNLOADER"
+            <TextBlock Text="Y2Akio - MADE BY AKIO CKIST"
                        VerticalAlignment="Center"
                        Margin="16,0,0,0"
                        FontSize="11"
@@ -33,12 +33,56 @@
             <StackPanel Width="1000" HorizontalAlignment="Center" Spacing="20">
 
                 <!-- Header / logo -->
-                <StackPanel HorizontalAlignment="Center" Spacing="6" Margin="0,12,0,0">
-                    <TextBlock Text="Media Downloader" FontSize="28" FontWeight="Bold" HorizontalAlignment="Center" />
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
-                        <TextBlock Text="Media downloader powered by yt-dlp" Opacity="0.7" VerticalAlignment="Center" />
-                        <Button x:Name="SettingsButton" Content="Settings" Click="SettingsButton_Click"
-                                CornerRadius="14" Padding="12,4" />
+                <StackPanel HorizontalAlignment="Center" Spacing="20" Margin="0,24,0,24">
+                    <!-- Cụm Logo ảnh to + Tên ứng dụng -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16">
+                        
+                        <!-- Logo siêu to, giữ nguyên nền trong suốt -->
+                        <Image Source="ms-appx:///Assets/mainLogo.png" 
+                            Height="150" 
+                            Stretch="Uniform" 
+                            VerticalAlignment="Center">
+                            <!-- Thêm đổ bóng nhẹ phía sau logo để tạo chiều sâu nếu cần -->
+                            <Image.Shadow>
+                                <ThemeShadow />
+                            </Image.Shadow>
+                        </Image>
+
+                        <!-- Tên ứng dụng với chữ cách điệu và hiệu ứng màu Gradient -->
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
+                            <TextBlock Text="Y2AKIO" FontSize="42" FontWeight="Black" VerticalAlignment="Center">
+                                <TextBlock.Foreground>
+                                    <SolidColorBrush Color="White" />
+                                </TextBlock.Foreground>
+                            </TextBlock>
+                            <TextBlock Text="ARTISAN" FontSize="42" FontWeight="Black" VerticalAlignment="Center">
+                                <TextBlock.Foreground>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#F58AFB" Offset="0" />
+                                        <GradientStop Color="#F25EE7" Offset="1" />
+                                    </LinearGradientBrush>
+                                </TextBlock.Foreground>
+                            </TextBlock>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Dòng mô tả phụ và nút Settings nằm cân đối bên dưới -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16">
+                        <TextBlock Text="Media downloader powered by yt-dlp" 
+                                Opacity="0.7" 
+                                FontSize="14" 
+                                VerticalAlignment="Center" />
+                        
+                        <!-- Nút Cài đặt bo tròn với nền tối, viền mờ ảo -->
+                        <Button x:Name="SettingsButton" 
+                                Click="SettingsButton_Click"
+                                CornerRadius="16" 
+                                Padding="16,6"
+                                Background="#1AFFFFFF"
+                                BorderBrush="#33FFFFFF"
+                                BorderThickness="1">
+                            <TextBlock Text="Cài đặt" FontSize="12" Opacity="0.9" />
+                        </Button>
                     </StackPanel>
                 </StackPanel>
 
