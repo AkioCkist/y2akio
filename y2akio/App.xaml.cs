@@ -35,6 +35,9 @@ namespace y2akio
         public App()
         {
             InitializeComponent();
+
+            // Register with the OS notification platform so toasts can be shown.
+            Services.ToastService.EnsureRegistered();
         }
 
         /// <summary>

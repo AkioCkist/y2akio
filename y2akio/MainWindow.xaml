@@ -118,6 +118,10 @@
 
                 <InfoBar x:Name="ErrorBar" Severity="Error" IsOpen="False" Title="Couldn't analyze that link" />
 
+                <InfoBar x:Name="SuccessBar" Severity="Success" IsOpen="False" Title="Download complete"
+                         IsClosable="True" />
+
+
                 <ProgressRing x:Name="AnalyzingRing" IsActive="False" HorizontalAlignment="Center" Width="32" Height="32" />
 
                 <!-- Analyzed video + download options -->
@@ -205,10 +209,50 @@
                                                   Checked="SubtitleSource_Changed" Unchecked="SubtitleSource_Changed" />
                                     </StackPanel>
 
-                                    <!-- Language -->
-                                    <StackPanel Spacing="4">
-                                        <TextBlock Text="Language" Opacity="0.7" FontSize="12" />
-                                        <ComboBox x:Name="SubtitleLanguageComboBox" HorizontalAlignment="Stretch" />
+                                    <!-- Manual: single-select language dropdown -->
+                                    <StackPanel x:Name="ManualLanguagePanel" Spacing="4" Margin="20,0,0,0">
+                                        <Grid ColumnSpacing="8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <ComboBox x:Name="SubtitleLanguageComboBox" Grid.Column="0" HorizontalAlignment="Stretch" />
+                                            <Button x:Name="ManualSelectAllButton" Grid.Column="1" Content="Select all"
+                                                    FontSize="12" Click="ManualSelectAllButton_Click" />
+                                            <Button x:Name="ManualDeselectAllButton" Grid.Column="2" Content="Deselect all"
+                                                    FontSize="12" Click="ManualDeselectAllButton_Click" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <!-- Auto: multi-select language checklist -->
+                                    <StackPanel x:Name="AutoLanguagePanel" Spacing="4" Margin="20,0,0,0" Visibility="Collapsed">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Languages" Opacity="0.7" FontSize="12" VerticalAlignment="Center" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                                <Button x:Name="AutoSelectAllButton" Content="Select all"
+                                                        FontSize="12" Click="AutoSelectAllButton_Click" />
+                                                <Button x:Name="AutoDeselectAllButton" Content="Deselect all"
+                                                        FontSize="12" Click="AutoDeselectAllButton_Click" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <Border CornerRadius="6" MaxHeight="170"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                                            <ScrollViewer>
+                                                <ItemsControl x:Name="AutoLanguageList">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="models:SubtitleSelection">
+                                                            <CheckBox Content="{x:Bind Display}" Margin="4,2"
+                                                                      IsChecked="{x:Bind Selected, Mode=TwoWay}" />
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </ScrollViewer>
+                                        </Border>
                                     </StackPanel>
 
                                     <!-- Format -->
@@ -320,6 +364,25 @@
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
+                    </Border>
+                </StackPanel>
+
+                <!-- Download log -->
+                <StackPanel x:Name="LogPanel" Visibility="Collapsed" Spacing="10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Download Log" FontSize="18" FontWeight="SemiBold" />
+                        <HyperlinkButton Grid.Column="1" Content="Clear" Click="ClearLogButton_Click" />
+                    </Grid>
+                    <Border CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                        <ScrollViewer x:Name="LogScrollViewer" MaxHeight="280" Padding="12" HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Auto">
+                            <TextBlock x:Name="LogTextBlock" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" />
+                        </ScrollViewer>
                     </Border>
                 </StackPanel>
 

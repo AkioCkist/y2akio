@@ -11,6 +11,31 @@ public record SubtitleLanguage(string Code, string Name)
     public override string ToString() => Name;
 }
 
+/// <summary>Checklist item for auto-generated subtitle languages: tick to select, plus the code for yt-dlp.</summary>
+public class SubtitleSelection : INotifyPropertyChanged
+{
+    public string Code { get; }
+    public string Name { get; }
+    public string Display => $"{Name} ({Code})";
+
+    public SubtitleSelection(string code, string name)
+    {
+        Code = code;
+        Name = name;
+    }
+
+    private bool _selected = true;
+    public bool Selected
+    {
+        get => _selected;
+        set { if (_selected == value) return; _selected = value; OnPropertyChanged(); }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void OnPropertyChanged([CallerMemberName] string? name = null) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+
 /// <summary>Result of analyzing a link: either a single video or a playlist.</summary>
 public class AnalyzeResult
 {

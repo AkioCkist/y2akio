@@ -27,6 +27,7 @@ public sealed partial class MainWindow : Window
     private VideoInfo? _currentVideo;
     private PlaylistInfo? _currentPlaylist;
     private CancellationTokenSource? _downloadCts;
+    private ObservableCollection<SubtitleSelection>? _autoSubtitleLangs;
 
     /// <summary>
     /// Looks for yt-dlp.exe next to the running app first (so it works after you publish/copy
@@ -78,6 +79,9 @@ public sealed partial class MainWindow : Window
 
         HistoryList.ItemsSource = _history;
         SaveLocationTextBox.Text = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\Downloads";
+
+        ToastService.Log = msg => AppendLog(msg);
+        ToastService.EnsureRegistered(); // set up AUMID + shortcut early so the first toast works
 
         _ = LoadHistoryAsync();
     }
@@ -202,6 +206,7 @@ public sealed partial class MainWindow : Window
         DownloadProgressBar.Value = 0;
         _downloadCts = new CancellationTokenSource();
 
+        ShowLogPanel();
         var progress = new Progress<DownloadProgress>(p =>
         {
             DownloadProgressBar.Value = p.Percent;
@@ -216,9 +221,11 @@ public sealed partial class MainWindow : Window
                 completed++;
                 DownloadStatusText.Text = $"({completed}/{selected.Count}) Downloading: {entry.Title}";
                 DownloadProgressBar.Value = 0;
+                AppendLog($"=== ({completed}/{selected.Count}) {entry.Title} ===");
 
                 var request = BuildDownloadRequest(entry.Url, isVideo, qualitySelection);
-                var savedPath = await _ytDlp.DownloadAsync(request, progress, _downloadCts.Token);
+                var savedPath = await _ytDlp.DownloadAsync(request, progress, _downloadCts.Token, AppendLog);
+                AppendLog($"Saved: {savedPath}");
 
                 _history.Insert(0, new DownloadHistoryItem
                 {
@@ -231,9 +238,12 @@ public sealed partial class MainWindow : Window
                 });
             }
             await _historyStore.SaveAsync(_history);
+            ToastService.ShowDownloadComplete($"{selected.Count} videos downloaded", _currentPlaylist.Title);
+            ShowDownloadComplete($"{selected.Count} videos downloaded from playlist");
         }
         catch (Exception ex)
         {
+            AppendLog($"ERROR: {ex.Message}");
             ErrorBar.Message = ex.Message;
             ErrorBar.IsOpen = true;
         }
@@ -241,6 +251,35 @@ public sealed partial class MainWindow : Window
         {
             DownloadPlaylistButton.IsEnabled = true;
         }
+    }
+
+    private void ShowLogPanel()
+    {
+        LogTextBlock.Text = "";
+        LogPanel.Visibility = Visibility.Visible;
+    }
+
+    private void AppendLog(string line)
+    {
+        // onLogLine is raised on yt-dlp's process thread; UI must be touched on the dispatcher.
+        var text = $"[{DateTime.Now:HH:mm:ss}] {line}\n";
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            LogTextBlock.Text += text;
+            // Keep the newest lines in view.
+            LogScrollViewer.ChangeView(null, LogScrollViewer.ScrollableHeight, null, true);
+        });
+    }
+
+    private void ClearLogButton_Click(object sender, RoutedEventArgs e)
+    {
+        LogTextBlock.Text = "";
+    }
+
+    private void ShowDownloadComplete(string message)
+    {
+        SuccessBar.Message = message;
+        SuccessBar.IsOpen = true;
     }
 
     private void PopulateOptionsPanel(VideoInfo video)
@@ -259,18 +298,19 @@ public sealed partial class MainWindow : Window
 
     private void PopulateSubtitleLanguages(VideoInfo video)
     {
+        // Manual (author-uploaded): single-select dropdown. "all" = every manual track.
         SubtitleLanguageComboBox.Items.Clear();
         SubtitleLanguageComboBox.Items.Add(new SubtitleLanguage("all", "All languages (auto)"));
-
-        // Prefer author-uploaded names; fall back to auto-generated ones for languages only auto has.
-        var combined = new Dictionary<string, string>();
-        foreach (var (code, name) in video.ManualSubtitleLanguages) combined[code] = name;
-        foreach (var (code, name) in video.AutoSubtitleLanguages)
-            combined.TryAdd(code, name);
-
-        foreach (var (code, name) in combined.OrderBy(p => p.Value))
+        foreach (var (code, name) in video.ManualSubtitleLanguages.OrderBy(p => p.Value))
             SubtitleLanguageComboBox.Items.Add(new SubtitleLanguage(code, $"{name} ({code})"));
+        SubtitleLanguageComboBox.Items.Add(new SubtitleLanguage("none", "None"));
         SubtitleLanguageComboBox.SelectedIndex = 0;
+
+        // Auto-generated: multi-select checklist.
+        _autoSubtitleLangs = new ObservableCollection<SubtitleSelection>();
+        foreach (var (code, name) in video.AutoSubtitleLanguages.OrderBy(p => p.Value))
+            _autoSubtitleLangs.Add(new SubtitleSelection(code, $"{name} ({code})"));
+        AutoLanguageList.ItemsSource = _autoSubtitleLangs;
     }
 
     private void SubtitlesCheck_Toggled(object sender, RoutedEventArgs e)
@@ -281,9 +321,26 @@ public sealed partial class MainWindow : Window
     private void SubtitleSource_Changed(object sender, RoutedEventArgs e)
     {
         // Fires during InitializeComponent before all fields are wired; skip until layout done.
-        if (SubtitleLanguageComboBox is null) return;
-        // No sources selected = nothing to download; mirror yt-dlp guard.
-        SubtitleLanguageComboBox.IsEnabled = SubtitleManualCheck.IsChecked == true || SubtitleAutoCheck.IsChecked == true;
+        if (ManualLanguagePanel is null || AutoLanguagePanel is null) return;
+        ManualLanguagePanel.Visibility = SubtitleManualCheck.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        AutoLanguagePanel.Visibility = SubtitleAutoCheck.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ManualSelectAllButton_Click(object sender, RoutedEventArgs e) => SubtitleLanguageComboBox.SelectedIndex = 0; // "all"
+
+    private void ManualDeselectAllButton_Click(object sender, RoutedEventArgs e) =>
+        SubtitleLanguageComboBox.SelectedIndex = SubtitleLanguageComboBox.Items.Count - 1; // "none"
+
+    private void AutoSelectAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_autoSubtitleLangs is null) return;
+        foreach (var lang in _autoSubtitleLangs) lang.Selected = true;
+    }
+
+    private void AutoDeselectAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_autoSubtitleLangs is null) return;
+        foreach (var lang in _autoSubtitleLangs) lang.Selected = false;
     }
 
     private void FileFormatToggle_Click(object sender, RoutedEventArgs e)
@@ -367,9 +424,9 @@ public sealed partial class MainWindow : Window
             PrefixChannel = PrefixChannelCheck.IsChecked == true,
             IncludeTitle = IncludeTitleCheck.IsChecked == true,
             SubtitlesEnabled = SubtitlesCheck.IsChecked == true,
-            SubtitleManual = SubtitleManualCheck.IsChecked == true,
-            SubtitleAuto = SubtitleAutoCheck.IsChecked == true,
-            SubtitleLangCode = SubtitleLanguageComboBox.SelectedItem is SubtitleLanguage lang ? lang.Code : "all",
+            SubtitleManual = ResolveSubtitleManualEnabled(),
+            SubtitleAuto = ResolveSubtitleAutoEnabled(),
+            SubtitleLangCode = ResolveSubtitleLangCodes(),
             SubtitleFormat = (SubtitleFormatComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString()?.ToLowerInvariant() ?? "srt",
             EmbedSubtitles = SubtitleEmbedRadio.IsChecked == true,
             EmbedMetadata = EmbedMetadataCheck.IsChecked == true,
@@ -380,6 +437,40 @@ public sealed partial class MainWindow : Window
                 _ => "none",
             },
         };
+    }
+
+    private bool ResolveSubtitleManualEnabled() =>
+        SubtitlesCheck.IsChecked == true
+        && SubtitleManualCheck.IsChecked == true
+        && SubtitleLanguageComboBox.SelectedItem is SubtitleLanguage manual
+        && manual.Code != "none";
+
+    private bool ResolveSubtitleAutoEnabled() =>
+        SubtitlesCheck.IsChecked == true
+        && SubtitleAutoCheck.IsChecked == true
+        && _autoSubtitleLangs?.Any(l => l.Selected) == true;
+
+    /// <summary>
+    /// Builds the comma-separated --sub-langs value. Manual is a single dropdown choice (or "all" for
+    /// every manual track); auto appends each ticked auto language. "all" alone covers everything.
+    /// </summary>
+    private string ResolveSubtitleLangCodes()
+    {
+        var codes = new List<string>();
+
+        if (SubtitleManualCheck.IsChecked == true
+            && SubtitleLanguageComboBox.SelectedItem is SubtitleLanguage manual
+            && manual.Code != "none")
+        {
+            if (manual.Code == "all")
+                return "all"; // grabs every track, manual and auto
+            codes.Add(manual.Code);
+        }
+
+        if (SubtitleAutoCheck.IsChecked == true && _autoSubtitleLangs is { } autoLangs)
+            codes.AddRange(autoLangs.Where(l => l.Selected).Select(l => l.Code));
+
+        return codes.Count == 0 ? "all" : string.Join(",", codes);
     }
 
     private async void DownloadNowButton_Click(object sender, RoutedEventArgs e)
@@ -396,6 +487,7 @@ public sealed partial class MainWindow : Window
         DownloadProgressBar.Value = 0;
         _downloadCts = new CancellationTokenSource();
 
+        ShowLogPanel();
         var progress = new Progress<DownloadProgress>(p =>
         {
             DownloadProgressBar.Value = p.Percent;
@@ -404,7 +496,10 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var savedPath = await _ytDlp.DownloadAsync(request, progress, _downloadCts.Token);
+            var savedPath = await _ytDlp.DownloadAsync(request, progress, _downloadCts.Token, AppendLog);
+            AppendLog($"Saved: {savedPath}");
+            ToastService.ShowDownloadComplete(_currentVideo.Title, savedPath);
+            ShowDownloadComplete($"Video saved: {_currentVideo.Title}");
 
             var historyItem = new DownloadHistoryItem
             {
@@ -420,6 +515,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            AppendLog($"ERROR: {ex.Message}");
             ErrorBar.Message = ex.Message;
             ErrorBar.IsOpen = true;
         }

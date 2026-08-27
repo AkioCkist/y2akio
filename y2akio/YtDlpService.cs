@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -119,7 +121,12 @@ public class YtDlpService
     /// Returns the final saved file path (best-effort — yt-dlp prints it in a "[download] Destination: ..."
     /// or "[Merger] Merging formats into ..." line).
     /// </summary>
-    public async Task<string> DownloadAsync(DownloadRequest req, IProgress<DownloadProgress> progress, CancellationToken ct = default)
+    /// <param name="onLogLine">Receives every raw stdout/stderr line (progress, ffmpeg, errors) for a debug log.</param>
+    public async Task<string> DownloadAsync(
+        DownloadRequest req,
+        IProgress<DownloadProgress> progress,
+        CancellationToken ct = default,
+        Action<string>? onLogLine = null)
     {
         Directory.CreateDirectory(req.SaveFolder);
 
@@ -164,7 +171,7 @@ public class YtDlpService
             args.Append($"--convert-subs {req.SubtitleFormat} "); // requires ffmpeg
 
             if (req.EmbedSubtitles)
-                args.Append("--embed-subs --no-keep-subs "); // embed into the video, don't leave loose files
+                args.Append("--embed-subs "); // embed into the video, don't leave loose files
         }
 
         args.Append($"\"{req.Url}\"");
@@ -174,8 +181,13 @@ public class YtDlpService
         var mergeRegex = new Regex(@"Merging formats into\s*""(.+)""", RegexOptions.Compiled);
         var progressRegex = new Regex(@"\[download\]\s+([\d.]+)%", RegexOptions.Compiled);
 
+        // Files present before this download, so cleanup only touches what this run created.
+        var priorFiles = SnapshotFileNames(req.SaveFolder);
+
         void OnLine(string line)
         {
+            onLogLine?.Invoke(line);
+
             var pMatch = progressRegex.Match(line);
             if (pMatch.Success && double.TryParse(pMatch.Groups[1].Value, out var pct))
             {
@@ -195,8 +207,62 @@ public class YtDlpService
         if (exitCode != 0)
             throw new InvalidOperationException(string.IsNullOrWhiteSpace(stderr) ? "Download failed." : stderr.Trim());
 
+        CleanupLeftoverFiles(req, priorFiles);
+
         progress.Report(new DownloadProgress { Percent = 100, StatusText = "Done" });
         return resolvedPath ?? Path.Combine(req.SaveFolder, "(saved)");
+    }
+
+    /// <summary>
+    /// Deletes loose sidecar files this run created, when the user asked for them to be embedded:
+    /// subtitle tracks (*.srt/*.vtt/*.ass), thumbnail images (*.webp/*.jpg/...), and stale *.part
+    /// fragments. Only files that did not exist before the download are removed, so a previous
+    /// "save separate file" download in the same folder is left untouched.
+    /// </summary>
+    private static void CleanupLeftoverFiles(DownloadRequest req, HashSet<string> priorFiles)
+    {
+        try
+        {
+            if (!Directory.Exists(req.SaveFolder)) return;
+            var created = Directory.EnumerateFiles(req.SaveFolder)
+                .Where(f => !priorFiles.Contains(f))
+                .ToList();
+
+            var subtitleExts = req.Kind == MediaKind.Video && req.EmbedSubtitles
+                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".srt", ".vtt", ".ass", ".ssa", ".sub" }
+                : null;
+            var thumbnailExts = req.ThumbnailMode == "embed"
+                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".webp", ".jpg", ".jpeg", ".png" }
+                : null;
+
+            foreach (var file in created)
+            {
+                var ext = Path.GetExtension(file);
+                if ((subtitleExts is not null && subtitleExts.Contains(ext)) ||
+                    (thumbnailExts is not null && thumbnailExts.Contains(ext)) ||
+                    string.Equals(ext, ".part", StringComparison.OrdinalIgnoreCase))
+                {
+                    try { File.Delete(file); } catch { /* ignore */ }
+                }
+            }
+        }
+        catch
+        {
+            // Cleanup is cosmetic; never fail the download over it.
+        }
+    }
+
+    private static HashSet<string> SnapshotFileNames(string dir)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            if (Directory.Exists(dir))
+                foreach (var f in Directory.EnumerateFiles(dir))
+                    set.Add(f);
+        }
+        catch { /* ignore */ }
+        return set;
     }
 
     private static string BuildOutputTemplate(DownloadRequest req)
