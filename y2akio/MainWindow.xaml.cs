@@ -349,8 +349,13 @@ public sealed partial class MainWindow : Window
         VideoFormatToggle.IsChecked = isVideo;
         AudioFormatToggle.IsChecked = !isVideo;
         ContainerFormatPanel.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
+        AudioFormatPanel.Visibility = isVideo ? Visibility.Collapsed : Visibility.Visible;
+        SubtitleSection.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
         RefreshQualityOptions();
     }
+
+    private void AudioFormatComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        => RefreshQualityOptions();
 
     /// <summary>Rebuilds the Quality/Format dropdown based on the selected media type and the analyzed formats.</summary>
     private void RefreshQualityOptions()
@@ -374,14 +379,21 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            foreach (var kbps in new[] { 320, 256, 192, 128 })
+            QualityComboBox.Items.Add("Best Quality");
+            if (!IsLosslessAudioFormat())
             {
-                var qualityLabel = kbps >= 256 ? "High Quality" : "Standard";
-                QualityComboBox.Items.Add($"MP3 {kbps} kbps ({qualityLabel})");
+                foreach (var kbps in new[] { 320, 256, 192, 128 })
+                    QualityComboBox.Items.Add($"{kbps} kbps");
             }
         }
 
         QualityComboBox.SelectedIndex = 0;
+    }
+
+    private bool IsLosslessAudioFormat()
+    {
+        var tag = (AudioFormatComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString();
+        return tag is "flac" or "wav" or "alac";
     }
 
     private async void ChooseFolderButton_Click(object sender, RoutedEventArgs e)
@@ -420,6 +432,7 @@ public sealed partial class MainWindow : Window
             TargetHeight = targetHeight,
             ContainerFormat = (ContainerComboBox.SelectedItem as string ?? "MP4").ToLowerInvariant(),
             AudioBitrateKbps = audioKbps,
+            AudioFormat = (AudioFormatComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "mp3",
             PrefixDateTime = PrefixDateTimeCheck.IsChecked == true,
             PrefixChannel = PrefixChannelCheck.IsChecked == true,
             IncludeTitle = IncludeTitleCheck.IsChecked == true,

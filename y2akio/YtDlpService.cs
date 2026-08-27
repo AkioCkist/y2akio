@@ -25,6 +25,7 @@ public class DownloadRequest
 
     // Audio-specific
     public int? AudioBitrateKbps { get; init; }     // 320/256/192/128, null = best
+    public string AudioFormat { get; init; } = "mp3"; // mp3/m4a/aac/flac/opus/vorbis/wav/alac/wma
 
     // Filename prefix toggles
     public bool PrefixDateTime { get; init; }
@@ -138,10 +139,10 @@ public class YtDlpService
 
         if (req.Kind == MediaKind.Audio)
         {
-            args.Append("-x --audio-format mp3 ");
+            args.Append("-x --audio-format " + req.AudioFormat + " ");
             args.Append(req.AudioBitrateKbps is int kbps
                 ? $"--audio-quality {kbps}k "
-                : "--audio-quality 0 "); // 0 = best
+                : "--audio-quality 0 "); // 0 = best (lossless formats ignore this anyway)
         }
         else
         {

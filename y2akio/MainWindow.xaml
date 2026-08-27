@@ -165,16 +165,32 @@
                         </StackPanel>
 
                         <StackPanel Spacing="6">
-                            <TextBlock Text="Quality / Format" Opacity="0.7" FontSize="12" />
+                            <TextBlock Text="Quality" Opacity="0.7" FontSize="12" />
                             <ComboBox x:Name="QualityComboBox" HorizontalAlignment="Stretch" />
                         </StackPanel>
 
                         <StackPanel x:Name="ContainerFormatPanel" Spacing="6">
                             <TextBlock Text="Video Format" Opacity="0.7" FontSize="12" />
-                            <ComboBox x:Name="ContainerComboBox" HorizontalAlignment="Stretch">
+                            <ComboBox x:Name="ContainerComboBox" HorizontalAlignment="Stretch" SelectedIndex="0">
                                 <x:String>MP4</x:String>
                                 <x:String>MKV</x:String>
                                 <x:String>WEBM</x:String>
+                            </ComboBox>
+                        </StackPanel>
+
+                        <StackPanel x:Name="AudioFormatPanel" Spacing="6" Visibility="Collapsed">
+                            <TextBlock Text="Audio Format" Opacity="0.7" FontSize="12" />
+                            <ComboBox x:Name="AudioFormatComboBox" HorizontalAlignment="Stretch" SelectedIndex="0"
+                                      SelectionChanged="AudioFormatComboBox_SelectionChanged">
+                                <ComboBoxItem Content="MP3" Tag="mp3" />
+                                <ComboBoxItem Content="M4A (AAC)" Tag="m4a" />
+                                <ComboBoxItem Content="AAC" Tag="aac" />
+                                <ComboBoxItem Content="FLAC (Lossless)" Tag="flac" />
+                                <ComboBoxItem Content="Opus" Tag="opus" />
+                                <ComboBoxItem Content="Vorbis (OGG)" Tag="vorbis" />
+                                <ComboBoxItem Content="WAV (Lossless)" Tag="wav" />
+                                <ComboBoxItem Content="ALAC (Lossless)" Tag="alac" />
+                                <ComboBoxItem Content="WMA" Tag="wma" />
                             </ComboBox>
                         </StackPanel>
 
@@ -183,6 +199,7 @@
                             <CheckBox x:Name="PrefixDateTimeCheck" Content="Download date + time" />
                             <CheckBox x:Name="PrefixChannelCheck" Content="Channel name" />
                             <CheckBox x:Name="IncludeTitleCheck" Content="Video title" IsChecked="True" />
+                            <StackPanel x:Name="SubtitleSection" Spacing="0">
                             <CheckBox x:Name="SubtitlesCheck" Content="Download subtitles"
                                       Checked="SubtitlesCheck_Toggled" Unchecked="SubtitlesCheck_Toggled" />
 
@@ -266,6 +283,7 @@
 
                                 </StackPanel>
                             </Border>
+                            </StackPanel>
                         </StackPanel>
 
                         <StackPanel Spacing="6">
