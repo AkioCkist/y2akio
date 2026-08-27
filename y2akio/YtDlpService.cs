@@ -29,7 +29,14 @@ public class DownloadRequest
     public bool PrefixChannel { get; init; }
     public bool IncludeTitle { get; init; } = true;
 
-    public bool DownloadSubtitles { get; init; }
+    // Subtitles (video only — the audio flow never sets these)
+    public bool SubtitlesEnabled { get; init; }
+    public bool SubtitleManual { get; init; } = true;   // author-uploaded
+    public bool SubtitleAuto { get; init; }              // auto-generated
+    public string SubtitleLangCode { get; init; } = "all"; // "all" or a specific code like "en"
+    public string SubtitleFormat { get; init; } = "srt";   // "srt" or "vtt"
+    public bool EmbedSubtitles { get; init; } = true;      // true = embed into file, false = save alongside
+
     public bool EmbedMetadata { get; init; } = true;
 
     // "embed" -> --embed-thumbnail, "save" -> write thumbnail alongside file, "none" -> skip
@@ -55,13 +62,44 @@ public class YtDlpService
         _ffmpegDirectory = ffmpegDirectory;
     }
 
-    /// <summary>Runs `yt-dlp --dump-single-json <url>` and parses the result.</summary>
-    public async Task<VideoInfo> AnalyzeAsync(string url, CancellationToken ct = default)
+    /// <summary>
+    /// Analyzes a pasted link. Runs a fast `--flat-playlist` probe first: if the link turns out to be a
+    /// playlist with more than one entry, returns basic metadata for every track (no per-video formats yet —
+    /// those get fetched lazily via <see cref="AnalyzeVideoAsync"/> when a specific track is clicked).
+    /// Otherwise falls through to a full single-video analyze.
+    /// </summary>
+    public async Task<AnalyzeResult> AnalyzeAsync(string url, CancellationToken ct = default)
+    {
+        var flatJson = await RunDumpJsonAsync(url, flat: true, ct);
+
+        using (var doc = JsonDocument.Parse(flatJson))
+        {
+            var root = doc.RootElement;
+            if (root.TryGetProperty("entries", out var entriesEl)
+                && entriesEl.ValueKind == JsonValueKind.Array
+                && entriesEl.GetArrayLength() > 1)
+            {
+                var playlist = PlaylistInfo.FromFlatJson(root, url);
+                return new AnalyzeResult { IsPlaylist = true, Playlist = playlist };
+            }
+        }
+
+        var video = await AnalyzeVideoAsync(url, ct);
+        return new AnalyzeResult { IsPlaylist = false, Video = video };
+    }
+
+    /// <summary>Runs a full (non-flat) `yt-dlp --dump-single-json <url>` for one specific video, formats included.</summary>
+    public async Task<VideoInfo> AnalyzeVideoAsync(string url, CancellationToken ct = default)
+    {
+        var json = await RunDumpJsonAsync(url, flat: false, ct);
+        return VideoInfo.FromJson(json, url);
+    }
+
+    private async Task<string> RunDumpJsonAsync(string url, bool flat, CancellationToken ct)
     {
         var args = new StringBuilder()
-            .Append("--dump-single-json ")
-            .Append("--no-playlist ")
-            .Append("--no-warnings ")
+            .Append("--dump-single-json --no-warnings ")
+            .Append(flat ? "--flat-playlist --playlist-items 1-500 " : "--no-playlist ")
             .Append(FfmpegLocationArg())
             .Append($"\"{url}\"");
 
@@ -73,7 +111,7 @@ public class YtDlpService
                 string.IsNullOrWhiteSpace(stderr) ? "yt-dlp failed to analyze this link." : stderr.Trim());
         }
 
-        return VideoInfo.FromJson(stdout, url);
+        return stdout;
     }
 
     /// <summary>
@@ -118,8 +156,16 @@ public class YtDlpService
                 break;
         }
 
-        if (req.DownloadSubtitles)
-            args.Append("--write-subs --sub-langs all --embed-subs ");
+        if (req.Kind == MediaKind.Video && req.SubtitlesEnabled && (req.SubtitleManual || req.SubtitleAuto))
+        {
+            if (req.SubtitleManual) args.Append("--write-subs ");
+            if (req.SubtitleAuto) args.Append("--write-auto-subs ");
+            args.Append($"--sub-langs \"{req.SubtitleLangCode}\" ");
+            args.Append($"--convert-subs {req.SubtitleFormat} "); // requires ffmpeg
+
+            if (req.EmbedSubtitles)
+                args.Append("--embed-subs --no-keep-subs "); // embed into the video, don't leave loose files
+        }
 
         args.Append($"\"{req.Url}\"");
 

@@ -24,6 +24,7 @@ public sealed partial class MainWindow : Window
     private readonly ObservableCollection<DownloadHistoryItem> _history = new();
 
     private VideoInfo? _currentVideo;
+    private PlaylistInfo? _currentPlaylist;
     private CancellationTokenSource? _downloadCts;
 
     /// <summary>
@@ -103,12 +104,71 @@ public sealed partial class MainWindow : Window
 
         ErrorBar.IsOpen = false;
         OptionsPanel.Visibility = Visibility.Collapsed;
+        PlaylistPanel.Visibility = Visibility.Collapsed;
         AnalyzingRing.IsActive = true;
         AnalyzeButton.IsEnabled = false;
 
         try
         {
-            var video = await _ytDlp.AnalyzeAsync(url);
+            var result = await _ytDlp.AnalyzeAsync(url);
+
+            if (result.IsPlaylist && result.Playlist is { } playlist)
+            {
+                _currentPlaylist = playlist;
+                PopulatePlaylistPanel(playlist);
+                PlaylistPanel.Visibility = Visibility.Visible;
+            }
+            else if (result.Video is { } video)
+            {
+                _currentVideo = video;
+                PopulateOptionsPanel(video);
+                OptionsPanel.Visibility = Visibility.Visible;
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorBar.Message = ex.Message;
+            ErrorBar.IsOpen = true;
+        }
+        finally
+        {
+            AnalyzingRing.IsActive = false;
+            AnalyzeButton.IsEnabled = true;
+        }
+    }
+
+    private void PopulatePlaylistPanel(PlaylistInfo playlist)
+    {
+        PlaylistTitleText.Text = playlist.Title;
+        var meta = new System.Collections.Generic.List<string> { $"{playlist.Count} videos" };
+        if (!string.IsNullOrWhiteSpace(playlist.Uploader)) meta.Add(playlist.Uploader);
+        PlaylistMetaText.Text = string.Join(" · ", meta);
+
+        PlaylistListView.ItemsSource = playlist.Entries;
+        UpdateDownloadPlaylistButton();
+    }
+
+    private void PlaylistEntryCheckBox_Changed(object sender, RoutedEventArgs e) => UpdateDownloadPlaylistButton();
+
+    private void UpdateDownloadPlaylistButton()
+    {
+        var selected = _currentPlaylist?.Entries.Count(e => e.Selected) ?? 0;
+        DownloadPlaylistButton.Content = selected > 0 ? $"Download Selected ({selected})" : "Download Selected";
+        DownloadPlaylistButton.IsEnabled = selected > 0;
+    }
+
+    private async void PlaylistListView_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is not PlaylistEntry entry || string.IsNullOrWhiteSpace(entry.Url))
+            return;
+
+        ErrorBar.IsOpen = false;
+        AnalyzingRing.IsActive = true;
+        DownloadPlaylistButton.IsEnabled = false;
+
+        try
+        {
+            var video = await _ytDlp.AnalyzeVideoAsync(entry.Url);
             _currentVideo = video;
             PopulateOptionsPanel(video);
             OptionsPanel.Visibility = Visibility.Visible;
@@ -121,7 +181,64 @@ public sealed partial class MainWindow : Window
         finally
         {
             AnalyzingRing.IsActive = false;
-            AnalyzeButton.IsEnabled = true;
+            DownloadPlaylistButton.IsEnabled = true;
+        }
+    }
+
+    private async void DownloadPlaylistButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentPlaylist is null) return;
+
+        var selected = _currentPlaylist.Entries.Where(en => en.Selected).ToList();
+        if (selected.Count == 0) return;
+
+        var isVideo = VideoFormatToggle.IsChecked == true;
+        var qualitySelection = QualityComboBox.SelectedItem as string ?? "";
+
+        DownloadPlaylistButton.IsEnabled = false;
+        DownloadProgressBar.Visibility = Visibility.Visible;
+        DownloadStatusText.Visibility = Visibility.Visible;
+        DownloadProgressBar.Value = 0;
+        _downloadCts = new CancellationTokenSource();
+
+        var progress = new Progress<DownloadProgress>(p =>
+        {
+            DownloadProgressBar.Value = p.Percent;
+            DownloadStatusText.Text = p.StatusText;
+        });
+
+        try
+        {
+            var completed = 0;
+            foreach (var entry in selected)
+            {
+                completed++;
+                DownloadStatusText.Text = $"({completed}/{selected.Count}) Downloading: {entry.Title}";
+                DownloadProgressBar.Value = 0;
+
+                var request = BuildDownloadRequest(entry.Url, isVideo, qualitySelection);
+                var savedPath = await _ytDlp.DownloadAsync(request, progress, _downloadCts.Token);
+
+                _history.Insert(0, new DownloadHistoryItem
+                {
+                    Title = entry.Title,
+                    Kind = request.Kind,
+                    QualityLabel = qualitySelection,
+                    FilePath = savedPath,
+                    FolderPath = request.SaveFolder,
+                    CompletedAt = DateTime.Now,
+                });
+            }
+            await _historyStore.SaveAsync(_history);
+        }
+        catch (Exception ex)
+        {
+            ErrorBar.Message = ex.Message;
+            ErrorBar.IsOpen = true;
+        }
+        finally
+        {
+            DownloadPlaylistButton.IsEnabled = true;
         }
     }
 
@@ -190,15 +307,11 @@ public sealed partial class MainWindow : Window
             SaveLocationTextBox.Text = folder.Path;
     }
 
-    private async void DownloadNowButton_Click(object sender, RoutedEventArgs e)
+    private DownloadRequest BuildDownloadRequest(string url, bool isVideo, string qualitySelection)
     {
-        if (_currentVideo is null) return;
-
-        var isVideo = VideoFormatToggle.IsChecked == true;
         int? targetHeight = null;
         int? audioKbps = null;
 
-        var qualitySelection = QualityComboBox.SelectedItem as string ?? "";
         if (isVideo)
         {
             if (qualitySelection.EndsWith('p') && int.TryParse(qualitySelection.TrimEnd('p'), out var h))
@@ -210,9 +323,9 @@ public sealed partial class MainWindow : Window
             if (int.TryParse(digits, out var kbps)) audioKbps = kbps;
         }
 
-        var request = new DownloadRequest
+        return new DownloadRequest
         {
-            Url = _currentVideo.OriginalUrl,
+            Url = url,
             Kind = isVideo ? MediaKind.Video : MediaKind.Audio,
             SaveFolder = SaveLocationTextBox.Text,
             TargetHeight = targetHeight,
@@ -221,7 +334,7 @@ public sealed partial class MainWindow : Window
             PrefixDateTime = PrefixDateTimeCheck.IsChecked == true,
             PrefixChannel = PrefixChannelCheck.IsChecked == true,
             IncludeTitle = IncludeTitleCheck.IsChecked == true,
-            DownloadSubtitles = SubtitlesCheck.IsChecked == true,
+            SubtitlesEnabled = SubtitlesCheck.IsChecked == true,
             EmbedMetadata = EmbedMetadataCheck.IsChecked == true,
             ThumbnailMode = ThumbnailComboBox.SelectedIndex switch
             {
@@ -230,6 +343,15 @@ public sealed partial class MainWindow : Window
                 _ => "none",
             },
         };
+    }
+
+    private async void DownloadNowButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentVideo is null) return;
+
+        var isVideo = VideoFormatToggle.IsChecked == true;
+        var qualitySelection = QualityComboBox.SelectedItem as string ?? "";
+        var request = BuildDownloadRequest(_currentVideo.OriginalUrl, isVideo, qualitySelection);
 
         DownloadNowButton.IsEnabled = false;
         DownloadProgressBar.Visibility = Visibility.Visible;
