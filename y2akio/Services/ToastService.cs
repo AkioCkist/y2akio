@@ -1,25 +1,20 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Security; // Thêm thư viện này để dùng SecurityElement.Escape
 using Microsoft.Windows.AppNotifications;
-using Microsoft.Windows.AppNotifications.Builder;
 using Microsoft.Win32;
 
 namespace y2akio.Services;
 
 /// <summary>
 /// Shows Windows toast notifications via the modern AppNotificationManager API.
-/// For unpackaged apps Windows App SDK requires: an AUMID registered in the registry, a Start-menu
-/// shortcut carrying that AUMID, and a registered COM notification activator (ToastActivatorCLSID) —
-/// otherwise Register() throws "No COM servers are registered for this app". All three are set up
-/// here, best-effort; failures are surfaced through <see cref="Log"/> and never break the download.
 /// </summary>
 public static class ToastService
 {
     public const string AppUserModelId = "Y2AkioMediaDownloader";
     private static readonly string ActivatorClsid = typeof(NotificationActivator).GUID.ToString("B").ToUpperInvariant();
 
-    /// <summary>Optional sink so callers can surface toast setup problems into their UI log.</summary>
     public static Action<string>? Log { get; set; }
 
     private static bool _registered;
@@ -30,13 +25,24 @@ public static class ToastService
         {
             EnsureRegistered();
 
-            var notification = new AppNotificationBuilder()
-                .AddText("Download complete")
-                .AddText(title)
-                .AddText(savedPath)
-                .SetTag("download-complete")
-                .BuildNotification();
+            // Lấy đường dẫn thư mục và chuyển đổi sang dạng URI (file:///)
+            var folder = Path.GetDirectoryName(savedPath) ?? savedPath;
+            var folderUri = new Uri(folder).AbsoluteUri;
 
+            // Xây dựng XML thủ công để ép Windows mở Protocol trực tiếp 
+            // (Tự động mở File Explorer, không mở app)
+            string xml = $@"
+<toast activationType=""protocol"" launch=""{folderUri}"">
+    <visual>
+        <binding template=""ToastGeneric"">
+            <text>Download complete</text>
+            <text>{SecurityElement.Escape(title)}</text>
+            <text>{SecurityElement.Escape(savedPath)}</text>
+        </binding>
+    </visual>
+</toast>";
+
+            var notification = new AppNotification(xml);
             AppNotificationManager.Default.Show(notification);
             Log?.Invoke("Toast shown");
         }
@@ -46,11 +52,6 @@ public static class ToastService
         }
     }
 
-    /// <summary>
-    /// Registers the app with the Windows notification platform: AUMID registry key, Start-menu
-    /// shortcut with that AUMID, and the COM activator CLSID that Register() verifies exists.
-    /// Never throws — toast setup is cosmetic, so any failure just logs and skips.
-    /// </summary>
     public static void EnsureRegistered()
     {
         if (_registered) return;
@@ -72,25 +73,26 @@ public static class ToastService
                 key.SetValue("ToastActivatorCLSID", ActivatorClsid);
             }
 
-            // 2) COM activator server registration: CLSID -> this exe, in-proc apartment.
+            // 2) Sửa COM activator server: File .exe bắt buộc phải dùng LocalServer32
             using (var clsidKey = Registry.CurrentUser.CreateSubKey(@"Software\Classes\CLSID\" + ActivatorClsid))
             {
                 clsidKey.SetValue("", "Y2Akio NotificationActivator");
-                using var serverKey = clsidKey.CreateSubKey("InprocServer32");
+                using var serverKey = clsidKey.CreateSubKey("LocalServer32");
                 serverKey.SetValue("", exePath);
-                serverKey.SetValue("ThreadingModel", "Apartment");
             }
 
-            // 3) Start-menu shortcut carrying the AUMID — required for unpackaged toasts.
+            // 3) Start-menu shortcut
             var startMenuDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Y2Akio");
             Directory.CreateDirectory(startMenuDir);
             var lnkPath = Path.Combine(startMenuDir, "Y2Akio Media Downloader.lnk");
             ShortcutHelper.Create(lnkPath, exePath, AppUserModelId);
 
-            // 4) Register with the OS notification platform.
+            // 4) Register
             AppNotificationManager.Default.Register();
             _registered = true;
+
+            // Xóa đăng ký sự kiện OnNotificationInvoked vì Windows Shell đã đảm nhận việc mở thư mục
         }
         catch (Exception ex)
         {
