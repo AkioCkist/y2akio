@@ -5,6 +5,12 @@ using System.Text.Json;
 
 namespace y2akio.Models;
 
+/// <summary>ComboBox item for a subtitle language: display name + language code to pass to yt-dlp.</summary>
+public record SubtitleLanguage(string Code, string Name)
+{
+    public override string ToString() => Name;
+}
+
 /// <summary>Result of analyzing a link: either a single video or a playlist.</summary>
 public class AnalyzeResult
 {

@@ -135,7 +135,49 @@
                             <CheckBox x:Name="PrefixDateTimeCheck" Content="Download date + time" />
                             <CheckBox x:Name="PrefixChannelCheck" Content="Channel name" />
                             <CheckBox x:Name="IncludeTitleCheck" Content="Video title" IsChecked="True" />
-                            <CheckBox x:Name="SubtitlesCheck" Content="Download subtitles" />
+                            <CheckBox x:Name="SubtitlesCheck" Content="Download subtitles"
+                                      Checked="SubtitlesCheck_Toggled" Unchecked="SubtitlesCheck_Toggled" />
+
+                            <Border x:Name="SubtitleOptionsPanel" Visibility="Collapsed" CornerRadius="8"
+                                    Padding="12,10" Margin="0,4,0,0"
+                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                                <StackPanel Spacing="10">
+
+                                    <TextBlock Text="Subtitle Options" FontSize="13" FontWeight="SemiBold" />
+
+                                    <!-- Where the sub file goes -->
+                                    <RadioButtons x:Name="SubtitleModeRadio" SelectedIndex="0" MaxColumns="1">
+                                        <RadioButton x:Name="SubtitleEmbedRadio" Content="Embed into video file" IsChecked="True" />
+                                        <RadioButton x:Name="SubtitleSeparateRadio" Content="Save as separate file" />
+                                    </RadioButtons>
+
+                                    <!-- Which tracks -->
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Include tracks" Opacity="0.7" FontSize="12" />
+                                        <CheckBox x:Name="SubtitleManualCheck" Content="Author-uploaded subs"
+                                                  IsChecked="True" Checked="SubtitleSource_Changed" Unchecked="SubtitleSource_Changed" />
+                                        <CheckBox x:Name="SubtitleAutoCheck" Content="Auto-generated (YouTube)"
+                                                  Checked="SubtitleSource_Changed" Unchecked="SubtitleSource_Changed" />
+                                    </StackPanel>
+
+                                    <!-- Language -->
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Language" Opacity="0.7" FontSize="12" />
+                                        <ComboBox x:Name="SubtitleLanguageComboBox" HorizontalAlignment="Stretch" />
+                                    </StackPanel>
+
+                                    <!-- Format -->
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Subtitle format" Opacity="0.7" FontSize="12" />
+                                        <ComboBox x:Name="SubtitleFormatComboBox" HorizontalAlignment="Stretch" SelectedIndex="0">
+                                            <ComboBoxItem Content="SRT" />
+                                            <ComboBoxItem Content="VTT" />
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
 
                         <StackPanel Spacing="6">

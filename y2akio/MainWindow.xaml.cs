@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -251,7 +252,38 @@ public sealed partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(video.ThumbnailUrl) && Uri.TryCreate(video.ThumbnailUrl, UriKind.Absolute, out var thumbUri))
             ThumbnailImage.Source = new BitmapImage(thumbUri);
 
+        PopulateSubtitleLanguages(video);
+        SubtitleOptionsPanel.Visibility = SubtitlesCheck.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         RefreshQualityOptions();
+    }
+
+    private void PopulateSubtitleLanguages(VideoInfo video)
+    {
+        SubtitleLanguageComboBox.Items.Clear();
+        SubtitleLanguageComboBox.Items.Add(new SubtitleLanguage("all", "All languages (auto)"));
+
+        // Prefer author-uploaded names; fall back to auto-generated ones for languages only auto has.
+        var combined = new Dictionary<string, string>();
+        foreach (var (code, name) in video.ManualSubtitleLanguages) combined[code] = name;
+        foreach (var (code, name) in video.AutoSubtitleLanguages)
+            combined.TryAdd(code, name);
+
+        foreach (var (code, name) in combined.OrderBy(p => p.Value))
+            SubtitleLanguageComboBox.Items.Add(new SubtitleLanguage(code, $"{name} ({code})"));
+        SubtitleLanguageComboBox.SelectedIndex = 0;
+    }
+
+    private void SubtitlesCheck_Toggled(object sender, RoutedEventArgs e)
+    {
+        SubtitleOptionsPanel.Visibility = SubtitlesCheck.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void SubtitleSource_Changed(object sender, RoutedEventArgs e)
+    {
+        // Fires during InitializeComponent before all fields are wired; skip until layout done.
+        if (SubtitleLanguageComboBox is null) return;
+        // No sources selected = nothing to download; mirror yt-dlp guard.
+        SubtitleLanguageComboBox.IsEnabled = SubtitleManualCheck.IsChecked == true || SubtitleAutoCheck.IsChecked == true;
     }
 
     private void FileFormatToggle_Click(object sender, RoutedEventArgs e)
@@ -335,6 +367,11 @@ public sealed partial class MainWindow : Window
             PrefixChannel = PrefixChannelCheck.IsChecked == true,
             IncludeTitle = IncludeTitleCheck.IsChecked == true,
             SubtitlesEnabled = SubtitlesCheck.IsChecked == true,
+            SubtitleManual = SubtitleManualCheck.IsChecked == true,
+            SubtitleAuto = SubtitleAutoCheck.IsChecked == true,
+            SubtitleLangCode = SubtitleLanguageComboBox.SelectedItem is SubtitleLanguage lang ? lang.Code : "all",
+            SubtitleFormat = (SubtitleFormatComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString()?.ToLowerInvariant() ?? "srt",
+            EmbedSubtitles = SubtitleEmbedRadio.IsChecked == true,
             EmbedMetadata = EmbedMetadataCheck.IsChecked == true,
             ThumbnailMode = ThumbnailComboBox.SelectedIndex switch
             {
