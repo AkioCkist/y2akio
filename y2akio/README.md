@@ -89,6 +89,44 @@ The app is **unpackaged** — no MSIX install needed, it runs straight from the 
 output. First launch registers a toast AUMID + Start-menu shortcut so download
 notifications work.
 
+## Build a standalone .exe (publish)
+
+Produces a self-contained Windows 11/10 x64 build (no .NET needed on the target
+machine):
+
+```powershell
+dotnet publish -c Release -p:Platform=x64 -p:PublishTrimmed=false
+```
+
+> `PublishTrimmed=false` is required — WinUI 3 apps break when trimming is enabled.
+
+Output goes to:
+
+```
+bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\
+├── y2akio.exe                  # the app
+├── ...                         # WinUI/WinAppSDK runtime DLLs
+└── bin\                        # copy yt-dlp + ffmpeg here (see below)
+```
+
+WinUI 3 unpackaged apps **cannot be a single .exe file** — the runtime DLLs in the
+publish folder are required. Ship/zip the whole `publish` folder together.
+
+The app looks for yt-dlp/ffmpeg in `publish\bin\` next to the exe, so copy them
+over (or point `ResolveYtDlpPath`/`ResolveFfmpegDirectory` at your own paths):
+
+```powershell
+cd bin\Release\net8.0-windows10.0.19041.0\win-x64\publish
+mkdir bin
+# 1. yt-dlp: single exe — grab from https://github.com/yt-dlp/yt-dlp/releases
+copy ..\..\..\..\..\bin\yt-dlp.exe .\bin\        # or wherever you keep it
+# 2. ffmpeg full build — extract so bin\ffmpeg-<ver>-full_build\bin\ffmpeg.exe exists
+xcopy ..\..\..\..\..\bin\ffmpeg-9.0.1-full_build .\bin\ /E
+```
+
+Then double-click `y2akio.exe`. First run registers the toast AUMID + Start-menu
+shortcut; repeat the toast step on the new machine if notifications don't show.
+
 ## How to use
 
 1. **Paste a link** into the URL box and hit **Analyze** (or press Enter).
