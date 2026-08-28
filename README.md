@@ -16,6 +16,62 @@ Services/YtDlpService.cs  Shells out to yt-dlp.exe, parses progress
 Services/HistoryStore.cs  Persists history.json in %LocalAppData%
 ```
 
+## Build a standalone `.exe` (publish)
+
+Produces a self-contained Windows 11/10 x64 build (no .NET needed on the target machine):
+
+```powershell
+dotnet publish -c Release -p:Platform=x64 -p:PublishTrimmed=false
+```
+
+> **Note:** `PublishTrimmed=false` is required — WinUI 3 apps break when trimming is enabled.
+
+Output goes to:
+
+```text
+bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\
+├── y2akio.exe                  # the app
+├── ...                         # WinUI/WinAppSDK runtime DLLs
+└── bin\                        # yt-dlp + ffmpeg
+```
+
+WinUI 3 unpackaged apps **cannot be a single `.exe` file** — the runtime DLLs in the `publish` folder are required. Ship or zip the entire `publish` folder together.
+
+The app looks for `yt-dlp` and `ffmpeg` in `publish\bin\` next to the `.exe`, so copy them there (or point `ResolveYtDlpPath` / `ResolveFfmpegDirectory` at your own paths).
+
+```powershell
+cd bin\Release\net8.0-windows10.0.19041.0\win-x64\publish
+
+mkdir bin
+
+# 1. yt-dlp: single executable
+# Download from:
+# https://github.com/yt-dlp/yt-dlp/releases
+copy ..\..\..\..\..\bin\yt-dlp.exe .\bin\
+
+# 2. FFmpeg: extract the full build
+# so bin\ffmpeg-<ver>-full_build\bin\ffmpeg.exe exists
+xcopy ..\..\..\..\..\bin\ffmpeg-9.0.1-full_build .\bin\ /E
+```
+
+After copying the dependencies, the folder should look roughly like this:
+
+```text
+publish\
+├── y2akio.exe
+├── *.dll
+├── ...
+└── bin\
+    ├── yt-dlp.exe
+    └── ffmpeg-9.0.1-full_build\
+        └── bin\
+            └── ffmpeg.exe
+```
+
+Then double-click `y2akio.exe` to launch the application.
+
+On first run, the app registers the toast AUMID and Start-menu shortcut. If notifications do not appear on another machine, repeat the toast registration step there.
+
 ## Getting it running
 
 1. **Create the project.** In Visual Studio, create a new *"Blank App, Packaged
