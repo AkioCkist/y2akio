@@ -73,6 +73,24 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
 
+            // Lấy AppWindow của cửa sổ hiện tại
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hWnd);
+        var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
+
+        // Đặt kích thước lúc khởi động (đơn vị: pixel, chưa scale theo DPI)
+        appWindow.Resize(new Windows.Graphics.SizeInt32(1280, 800));
+
+        // (tuỳ chọn) căn giữa màn hình
+        var displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(
+            windowId, Microsoft.UI.Windowing.DisplayAreaFallback.Primary);
+        if (displayArea != null)
+        {
+            var centerX = (displayArea.WorkArea.Width - 1280) / 2;
+            var centerY = (displayArea.WorkArea.Height - 800) / 2;
+            appWindow.Move(new Windows.Graphics.PointInt32(centerX, centerY));
+        }
+
         Title = "YT-DLP Media Downloader";
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);

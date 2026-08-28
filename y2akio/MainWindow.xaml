@@ -64,13 +64,13 @@
                                 </Image.Shadow>
                             </Image>
 
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
-                                <TextBlock Text="Y2AKIO" FontSize="42" FontWeight="Black" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="Y2" FontSize="42" FontWeight="Black" VerticalAlignment="Center">
                                     <TextBlock.Foreground>
                                         <SolidColorBrush Color="White" />
                                     </TextBlock.Foreground>
                                 </TextBlock>
-                                <TextBlock Text="ARTISAN" FontSize="42" FontWeight="Black" VerticalAlignment="Center">
+                                <TextBlock Text="AKIO" FontSize="42" FontWeight="Black" VerticalAlignment="Center">
                                     <TextBlock.Foreground>
                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                             <GradientStop Color="#F58AFB" Offset="0" />
