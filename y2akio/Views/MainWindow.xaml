@@ -35,11 +35,7 @@
                 IsPaneToggleButtonVisible="True"
                 ItemInvoked="NavView_ItemInvoked">
 
-            <!-- Nền sidebar màu đen -->
-            <NavigationView.Resources>
-                <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="Black" />
-                <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="Black" />
-            </NavigationView.Resources>
+
 
             <NavigationView.MenuItems>
                 <NavigationViewItem x:Name="NavHomeItem" Content="Home" Icon="Home" Tag="home" IsSelected="True" />

@@ -147,7 +147,7 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <Button x:Name="ResizeButton" Grid.Column="0" Content="Resize Image" Height="40"
-                                    HorizontalAlignment="Stretch" Background="#1FBF83" Click="ResizeButton_Click" />
+                                    HorizontalAlignment="Stretch" Style="{StaticResource PrimaryActionButtonStyle}" Click="ResizeButton_Click" />
                             <ProgressRing x:Name="ResizeRing" Grid.Column="1" Width="32" Height="32"
                                           IsActive="False" VerticalAlignment="Center" />
                         </Grid>

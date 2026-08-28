@@ -23,11 +23,8 @@
                     </Image>
 
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="Y2" FontSize="42" FontWeight="Black" VerticalAlignment="Center">
-                            <TextBlock.Foreground>
-                                <SolidColorBrush Color="White" />
-                            </TextBlock.Foreground>
-                        </TextBlock>
+                        <TextBlock Text="Y2" FontSize="42" FontWeight="Black" VerticalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                         <TextBlock Text="AKIO" FontSize="42" FontWeight="Black" VerticalAlignment="Center">
                             <TextBlock.Foreground>
                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
@@ -69,23 +66,7 @@
                         MinWidth="96"
                         Padding="16,0"
                         Click="AnalyzeButton_Click"
-                        CornerRadius="4"
-                        Foreground="White"
-                        Background="#C41E3A"
-                        BorderBrush="#A01830"
-                        BorderThickness="1">
-                    <Button.Resources>
-                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#D42A48" />
-                        <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White" />
-                        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#B01E38" />
-                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#A01830" />
-                        <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
-                        <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#8A1428" />
-                        <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#66C41E3A" />
-                        <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="#99FFFFFF" />
-                        <SolidColorBrush x:Key="ButtonBorderBrushDisabled" Color="#4DC41E3A" />
-                    </Button.Resources>
-                </Button>
+                        Style="{StaticResource PrimaryActionButtonStyle}" />
             </Grid>
 
             <InfoBar x:Name="ErrorBar" Severity="Error" IsOpen="False" Title="Couldn't analyze that link" />
@@ -293,7 +274,7 @@
                             Content="Download Now"
                             Height="44"
                             HorizontalAlignment="Stretch"
-                            Background="#1FBF83"
+                            Style="{StaticResource PrimaryActionButtonStyle}"
                             Click="DownloadNowButton_Click" />
 
                     <ProgressBar x:Name="DownloadProgressBar" Minimum="0" Maximum="100" Visibility="Collapsed" />
@@ -314,8 +295,9 @@
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                         <Button x:Name="DownloadPlaylistButton" Content="Download Selected"
-                                Click="DownloadPlaylistButton_Click" CornerRadius="8" Padding="14,8" />
-                    </StackPanel>
+                                Style="{StaticResource PrimaryActionButtonStyle}"
+                                Click="DownloadPlaylistButton_Click" Padding="14,8" />
+                        </StackPanel>
                 </Grid>
 
                 <Border CornerRadius="12" Padding="8"

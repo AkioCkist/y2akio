@@ -18,6 +18,12 @@ public sealed partial class MainWindow : Window
 
         appWindow.Resize(new Windows.Graphics.SizeInt32(1280, 800));
 
+        var iconPath = System.IO.Path.Combine(System.AppContext.BaseDirectory, "Assets", "app.ico");
+        if (System.IO.File.Exists(iconPath))
+        {
+            appWindow.SetIcon(iconPath);
+        }
+
         var displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(
             windowId, Microsoft.UI.Windowing.DisplayAreaFallback.Primary);
         if (displayArea != null)

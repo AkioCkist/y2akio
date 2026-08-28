@@ -8,9 +8,34 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
-                <!-- Other merged dictionaries here -->
             </ResourceDictionary.MergedDictionaries>
-            <!-- Other app resources here -->
+
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Default">
+                    <!-- Dark theme: Red accent (#C41E3A) -->
+                    <SolidColorBrush x:Key="PrimaryActionButtonBackground" Color="#C41E3A" />
+                    <SolidColorBrush x:Key="PrimaryActionButtonForeground" Color="White" />
+                    <SolidColorBrush x:Key="PrimaryActionButtonPointerOverBackground" Color="#D42A48" />
+                    <SolidColorBrush x:Key="PrimaryActionButtonPressedBackground" Color="#A01830" />
+                    <SolidColorBrush x:Key="PrimaryActionButtonBorder" Color="#A01830" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Light">
+                    <!-- Light theme: Clean Brown accent (#7A4B2A) -->
+                    <SolidColorBrush x:Key="PrimaryActionButtonBackground" Color="#7A4B2A" />
+                    <SolidColorBrush x:Key="PrimaryActionButtonForeground" Color="White" />
+                    <SolidColorBrush x:Key="PrimaryActionButtonPointerOverBackground" Color="#8C5833" />
+                    <SolidColorBrush x:Key="PrimaryActionButtonPressedBackground" Color="#663E21" />
+                    <SolidColorBrush x:Key="PrimaryActionButtonBorder" Color="#663E21" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <Style x:Key="PrimaryActionButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="{ThemeResource PrimaryActionButtonBackground}" />
+                <Setter Property="Foreground" Value="{ThemeResource PrimaryActionButtonForeground}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource PrimaryActionButtonBorder}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="4" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
