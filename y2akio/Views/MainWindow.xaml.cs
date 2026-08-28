@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using y2akio.Services;
 
 namespace y2akio.Views;
 
@@ -10,21 +11,19 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
 
-        // Lấy AppWindow của cửa sổ hiện tại
-        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hWnd);
+        // ── Window sizing & centering ──────────────────────────────────────
+        var hWnd      = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var windowId  = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hWnd);
         var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
 
-        // Đặt kích thước lúc khởi động (đơn vị: pixel, chưa scale theo DPI)
         appWindow.Resize(new Windows.Graphics.SizeInt32(1280, 800));
 
-        // (tuỳ chọn) căn giữa màn hình
         var displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(
             windowId, Microsoft.UI.Windowing.DisplayAreaFallback.Primary);
         if (displayArea != null)
         {
-            var centerX = (displayArea.WorkArea.Width - 1280) / 2;
-            var centerY = (displayArea.WorkArea.Height - 800) / 2;
+            var centerX = (displayArea.WorkArea.Width  - 1280) / 2;
+            var centerY = (displayArea.WorkArea.Height - 800)  / 2;
             appWindow.Move(new Windows.Graphics.PointInt32(centerX, centerY));
         }
 
@@ -32,20 +31,43 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
 
-        // Mở trang Home mặc định khi start app.
+        // ── Default page ───────────────────────────────────────────────────
         ContentFrame.Navigate(typeof(HomePage));
+
+        // ── Theme: apply saved preference, then react to changes made in SettingsPage ──
+        ApplyTheme(AppSettingsService.Instance.Theme);
+        AppSettingsService.Instance.SettingsChanged += (_, args) =>
+        {
+            if (args.ThemeChanged)
+                DispatcherQueue.TryEnqueue(() => ApplyTheme(AppSettingsService.Instance.Theme));
+        };
     }
+
+    // ─── Theme helper ────────────────────────────────────────────────────────
+
+    private void ApplyTheme(AppTheme theme)
+    {
+        if (Content is not FrameworkElement root) return;
+        root.RequestedTheme = theme switch
+        {
+            AppTheme.Light => ElementTheme.Light,
+            AppTheme.Dark  => ElementTheme.Dark,
+            _              => ElementTheme.Default,   // follows Windows system setting
+        };
+    }
+
+    // ─── Navigation ──────────────────────────────────────────────────────────
 
     private void NavView_ItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
     {
         if (args.IsSettingsInvoked)
         {
-            // Settings chưa có trang riêng — giữ nguyên trang hiện tại.
+            if (ContentFrame.CurrentSourcePageType != typeof(SettingsPage))
+                ContentFrame.Navigate(typeof(SettingsPage));
             return;
         }
 
-        if (args.InvokedItemContainer?.Tag is not string tag)
-            return;
+        if (args.InvokedItemContainer?.Tag is not string tag) return;
 
         if (tag == "home")
         {

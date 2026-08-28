@@ -76,12 +76,116 @@ public sealed partial class HomePage : Page
         InitializeComponent();
 
         HistoryList.ItemsSource = _history;
-        SaveLocationTextBox.Text = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\Downloads";
+
+        // Load default save folders from persisted settings
+        VideoSaveLocationTextBox.Text = AppSettingsService.Instance.VideoSaveFolder;
+        AudioSaveLocationTextBox.Text = AppSettingsService.Instance.AudioSaveFolder;
 
         ToastService.Log = msg => AppendLog(msg);
 
         _ = LoadHistoryAsync();
+
+        // Apply current language on page load
+        ApplyLanguage();
+
+        // React to language changes (from SettingsPage or elsewhere)
+        LocalizationService.LanguageChanged += (_, _) =>
+            DispatcherQueue.TryEnqueue(ApplyLanguage);
+
+        // React to save-folder changes made in SettingsPage
+        AppSettingsService.Instance.SettingsChanged += (_, args) =>
+        {
+            if (!args.SaveFolderChanged) return;
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                VideoSaveLocationTextBox.Text = AppSettingsService.Instance.VideoSaveFolder;
+                AudioSaveLocationTextBox.Text = AppSettingsService.Instance.AudioSaveFolder;
+            });
+        };
     }
+
+    // ─── Localization ─────────────────────────────────────────────────────────
+
+    private void ApplyLanguage()
+    {
+        // Header
+        SubtitleText.Text = L("Home.Subtitle");
+
+        // URL bar
+        UrlTextBox.PlaceholderText = L("Home.UrlPlaceholder");
+        AnalyzeButton.Content = L("Home.Analyze");
+
+        // Info bars
+        ErrorBar.Title   = L("Home.ErrorTitle");
+        SuccessBar.Title = L("Home.SuccessTitle");
+
+        // Download options section
+        DownloadOptionsTitle.Text  = L("Home.DownloadOptions");
+        FileFormatLabel.Text       = L("Home.FileFormat");
+        VideoFormatToggle.Content  = L("Home.VideoMp4");
+        AudioFormatToggle.Content  = L("Home.AudioMusic");
+        QualityLabel.Text          = L("Home.Quality");
+        VideoFormatLabel.Text      = L("Home.VideoFormat");
+        AudioFormatLabel.Text      = L("Home.AudioFormat");
+
+        // File name prefix
+        FileNamePrefixLabel.Text   = L("Home.FileNamePrefix");
+        PrefixDateTimeCheck.Content = L("Home.PrefixDateTime");
+        PrefixChannelCheck.Content  = L("Home.PrefixChannel");
+        IncludeTitleCheck.Content   = L("Home.IncludeTitle");
+
+        // Subtitles
+        SubtitlesCheck.Content       = L("Home.DownloadSubtitles");
+        SubtitleOptionsTitle.Text    = L("Home.SubtitleOptions");
+        SubtitleEmbedRadio.Content   = L("Home.SubtitleEmbed");
+        SubtitleSeparateRadio.Content= L("Home.SubtitleSeparate");
+        IncludeTracksLabel.Text      = L("Home.IncludeTracks");
+        SubtitleManualCheck.Content  = L("Home.ManualSubs");
+        SubtitleAutoCheck.Content    = L("Home.AutoSubs");
+        AutoLanguagesLabel.Text      = L("Home.Languages");
+        ManualSelectAllButton.Content  = L("Home.SelectAll");
+        ManualDeselectAllButton.Content= L("Home.DeselectAll");
+        AutoSelectAllButton.Content    = L("Home.SelectAll");
+        AutoDeselectAllButton.Content  = L("Home.DeselectAll");
+        SubtitleFormatLabel.Text       = L("Home.SubtitleFormat");
+
+        // Save locations
+        VideoSaveLocationLabel.Text    = L("Home.VideoSaveLocation");
+        AudioSaveLocationLabel.Text    = L("Home.AudioSaveLocation");
+        ChooseVideoFolderButton.Content = L("Home.ChooseFolder");
+        ChooseAudioFolderButton.Content = L("Home.ChooseFolder");
+
+        // Extra options
+        ExtraOptionsLabel.Text       = L("Home.ExtraOptions");
+        EmbedMetadataCheck.Content   = L("Home.EmbedMetadata");
+        ThumbnailLabel.Text          = L("Home.Thumbnail");
+
+        // Rebuild ThumbnailComboBox items (x:String items can't be updated in place)
+        var thumbIdx = ThumbnailComboBox.SelectedIndex;
+        ThumbnailComboBox.Items.Clear();
+        ThumbnailComboBox.Items.Add(L("Home.ThumbnailEmbed"));
+        ThumbnailComboBox.Items.Add(L("Home.ThumbnailSave"));
+        ThumbnailComboBox.Items.Add(L("Home.ThumbnailNone"));
+        ThumbnailComboBox.SelectedIndex = thumbIdx >= 0 ? thumbIdx : 0;
+
+        // Download button
+        DownloadNowButton.Content = L("Home.DownloadNow");
+
+        // Log section
+        DownloadLogTitle.Text = L("Home.DownloadLog");
+        ClearLogButton.Content = L("Home.Clear");
+
+        // History section
+        DownloadHistoryTitle.Text  = L("Home.DownloadHistory");
+        ClearHistoryButton.Content = L("Home.ClearAll");
+
+        // Playlist button
+        UpdateDownloadPlaylistButton();
+    }
+
+    private static string L(string key) => LocalizationService.Get(key);
+
+    // ─── History ──────────────────────────────────────────────────────────────
 
     private async Task LoadHistoryAsync()
     {
@@ -89,6 +193,8 @@ public sealed partial class HomePage : Page
         foreach (var item in items.OrderByDescending(i => i.CompletedAt))
             _history.Add(item);
     }
+
+    // ─── URL analysis ────────────────────────────────────────────────────────
 
     private void UrlTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
     {
@@ -139,10 +245,12 @@ public sealed partial class HomePage : Page
         }
     }
 
+    // ─── Playlist ─────────────────────────────────────────────────────────────
+
     private void PopulatePlaylistPanel(PlaylistInfo playlist)
     {
         PlaylistTitleText.Text = playlist.Title;
-        var meta = new System.Collections.Generic.List<string> { $"{playlist.Count} videos" };
+        var meta = new List<string> { $"{playlist.Count} videos" };
         if (!string.IsNullOrWhiteSpace(playlist.Uploader)) meta.Add(playlist.Uploader);
         PlaylistMetaText.Text = string.Join(" · ", meta);
 
@@ -155,7 +263,8 @@ public sealed partial class HomePage : Page
     private void UpdateDownloadPlaylistButton()
     {
         var selected = _currentPlaylist?.Entries.Count(e => e.Selected) ?? 0;
-        DownloadPlaylistButton.Content = selected > 0 ? $"Download Selected ({selected})" : "Download Selected";
+        var baseText = L("Home.DownloadSelected");
+        DownloadPlaylistButton.Content = selected > 0 ? $"{baseText} ({selected})" : baseText;
         DownloadPlaylistButton.IsEnabled = selected > 0;
     }
 
@@ -250,6 +359,8 @@ public sealed partial class HomePage : Page
         }
     }
 
+    // ─── Log ─────────────────────────────────────────────────────────────────
+
     private void ShowLogPanel()
     {
         LogTextBlock.Text = "";
@@ -278,6 +389,8 @@ public sealed partial class HomePage : Page
         SuccessBar.Message = message;
         SuccessBar.IsOpen = true;
     }
+
+    // ─── Options panel ────────────────────────────────────────────────────────
 
     private void PopulateOptionsPanel(VideoInfo video)
     {
@@ -348,6 +461,11 @@ public sealed partial class HomePage : Page
         ContainerFormatPanel.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
         AudioFormatPanel.Visibility = isVideo ? Visibility.Collapsed : Visibility.Visible;
         SubtitleSection.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
+
+        // Toggle which save location row is shown
+        VideoSaveLocationRow.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
+        AudioSaveLocationRow.Visibility = isVideo ? Visibility.Collapsed : Visibility.Visible;
+
         RefreshQualityOptions();
     }
 
@@ -393,17 +511,32 @@ public sealed partial class HomePage : Page
         return tag is "flac" or "wav" or "alac";
     }
 
-    private async void ChooseFolderButton_Click(object sender, RoutedEventArgs e)
+    // ─── Folder pickers ──────────────────────────────────────────────────────
+
+    private async void ChooseVideoFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        var folder = await PickFolderAsync();
+        if (folder != null)
+            VideoSaveLocationTextBox.Text = folder.Path;
+    }
+
+    private async void ChooseAudioFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        var folder = await PickFolderAsync();
+        if (folder != null)
+            AudioSaveLocationTextBox.Text = folder.Path;
+    }
+
+    private static async Task<Windows.Storage.StorageFolder?> PickFolderAsync()
     {
         var picker = new FolderPicker();
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
         WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
         picker.FileTypeFilter.Add("*");
-
-        var folder = await picker.PickSingleFolderAsync();
-        if (folder != null)
-            SaveLocationTextBox.Text = folder.Path;
+        return await picker.PickSingleFolderAsync();
     }
+
+    // ─── Download ─────────────────────────────────────────────────────────────
 
     private DownloadRequest BuildDownloadRequest(string url, bool isVideo, string qualitySelection)
     {
@@ -421,11 +554,14 @@ public sealed partial class HomePage : Page
             if (int.TryParse(digits, out var kbps)) audioKbps = kbps;
         }
 
+        // Use the correct save folder for the chosen media type
+        var saveFolder = isVideo ? VideoSaveLocationTextBox.Text : AudioSaveLocationTextBox.Text;
+
         return new DownloadRequest
         {
             Url = url,
             Kind = isVideo ? MediaKind.Video : MediaKind.Audio,
-            SaveFolder = SaveLocationTextBox.Text,
+            SaveFolder = saveFolder,
             TargetHeight = targetHeight,
             ContainerFormat = (ContainerComboBox.SelectedItem as string ?? "MP4").ToLowerInvariant(),
             AudioBitrateKbps = audioKbps,
@@ -534,6 +670,8 @@ public sealed partial class HomePage : Page
             DownloadNowButton.IsEnabled = true;
         }
     }
+
+    // ─── History actions ─────────────────────────────────────────────────────
 
     private async void ClearHistoryButton_Click(object sender, RoutedEventArgs e)
     {

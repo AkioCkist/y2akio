@@ -40,10 +40,11 @@
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16">
-                    <TextBlock Text="Media downloader powered by yt-dlp"
-                               Opacity="0.7"
-                               FontSize="14"
-                               VerticalAlignment="Center" />
+                    <TextBlock x:Name="SubtitleText"
+                           Text="Media downloader powered by yt-dlp"
+                           Opacity="0.7"
+                           FontSize="14"
+                           VerticalAlignment="Center" />
                 </StackPanel>
             </StackPanel>
 
@@ -115,10 +116,10 @@
 
                 <!-- Right: options -->
                 <StackPanel Grid.Column="1" Spacing="14">
-                    <TextBlock Text="Download Options" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock x:Name="DownloadOptionsTitle" Text="Download Options" FontSize="18" FontWeight="SemiBold" />
 
                     <StackPanel Spacing="6">
-                        <TextBlock Text="File Format" Opacity="0.7" FontSize="12" />
+                        <TextBlock x:Name="FileFormatLabel" Text="File Format" Opacity="0.7" FontSize="12" />
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -132,12 +133,12 @@
                     </StackPanel>
 
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Quality" Opacity="0.7" FontSize="12" />
+                        <TextBlock x:Name="QualityLabel" Text="Quality" Opacity="0.7" FontSize="12" />
                         <ComboBox x:Name="QualityComboBox" HorizontalAlignment="Stretch" />
                     </StackPanel>
 
                     <StackPanel x:Name="ContainerFormatPanel" Spacing="6">
-                        <TextBlock Text="Video Format" Opacity="0.7" FontSize="12" />
+                        <TextBlock x:Name="VideoFormatLabel" Text="Video Format" Opacity="0.7" FontSize="12" />
                         <ComboBox x:Name="ContainerComboBox" HorizontalAlignment="Stretch" SelectedIndex="0">
                             <x:String>MP4</x:String>
                             <x:String>MKV</x:String>
@@ -146,7 +147,7 @@
                     </StackPanel>
 
                     <StackPanel x:Name="AudioFormatPanel" Spacing="6" Visibility="Collapsed">
-                        <TextBlock Text="Audio Format" Opacity="0.7" FontSize="12" />
+                        <TextBlock x:Name="AudioFormatLabel" Text="Audio Format" Opacity="0.7" FontSize="12" />
                         <ComboBox x:Name="AudioFormatComboBox" HorizontalAlignment="Stretch" SelectedIndex="0"
                                   SelectionChanged="AudioFormatComboBox_SelectionChanged">
                             <ComboBoxItem Content="MP3" Tag="mp3" />
@@ -162,7 +163,7 @@
                     </StackPanel>
 
                     <StackPanel Spacing="6">
-                        <TextBlock Text="File name prefix" Opacity="0.7" FontSize="12" />
+                        <TextBlock x:Name="FileNamePrefixLabel" Text="File name prefix" Opacity="0.7" FontSize="12" />
                         <CheckBox x:Name="PrefixDateTimeCheck" Content="Download date + time" />
                         <CheckBox x:Name="PrefixChannelCheck" Content="Channel name" />
                         <CheckBox x:Name="IncludeTitleCheck" Content="Video title" IsChecked="True" />
@@ -175,7 +176,7 @@
                                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                                 <StackPanel Spacing="10">
-                                    <TextBlock Text="Subtitle Options" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="SubtitleOptionsTitle" Text="Subtitle Options" FontSize="13" FontWeight="SemiBold" />
 
                                     <RadioButtons x:Name="SubtitleModeRadio" SelectedIndex="0" MaxColumns="1">
                                         <RadioButton x:Name="SubtitleEmbedRadio" Content="Embed into video file" IsChecked="True" />
@@ -183,7 +184,7 @@
                                     </RadioButtons>
 
                                     <StackPanel Spacing="4">
-                                        <TextBlock Text="Include tracks" Opacity="0.7" FontSize="12" />
+                                        <TextBlock x:Name="IncludeTracksLabel" Text="Include tracks" Opacity="0.7" FontSize="12" />
                                         <CheckBox x:Name="SubtitleManualCheck" Content="Author-uploaded subs"
                                                   IsChecked="True" Checked="SubtitleSource_Changed" Unchecked="SubtitleSource_Changed" />
                                         <CheckBox x:Name="SubtitleAutoCheck" Content="Auto-generated (YouTube)"
@@ -211,7 +212,7 @@
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="Languages" Opacity="0.7" FontSize="12" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="AutoLanguagesLabel" Grid.Column="0" Text="Languages" Opacity="0.7" FontSize="12" VerticalAlignment="Center" />
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                                                 <Button x:Name="AutoSelectAllButton" Content="Select all"
                                                         FontSize="12" Click="AutoSelectAllButton_Click" />
@@ -235,7 +236,7 @@
                                     </StackPanel>
 
                                     <StackPanel Spacing="4">
-                                        <TextBlock Text="Subtitle format" Opacity="0.7" FontSize="12" />
+                                        <TextBlock x:Name="SubtitleFormatLabel" Text="Subtitle format" Opacity="0.7" FontSize="12" />
                                         <ComboBox x:Name="SubtitleFormatComboBox" HorizontalAlignment="Stretch" SelectedIndex="0">
                                             <ComboBoxItem Content="SRT" />
                                             <ComboBoxItem Content="VTT" />
@@ -246,26 +247,41 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="Save Location" Opacity="0.7" FontSize="12" />
+                    <!-- Video save location (visible when Video format is selected) -->
+                    <StackPanel x:Name="VideoSaveLocationRow" Spacing="6">
+                        <TextBlock x:Name="VideoSaveLocationLabel" Text="Video Save Location" Opacity="0.7" FontSize="12" />
                         <Grid ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBox x:Name="SaveLocationTextBox" Grid.Column="0" IsReadOnly="True" />
-                            <Button x:Name="ChooseFolderButton" Grid.Column="1" Content="Choose Folder"
-                                    Click="ChooseFolderButton_Click" />
+                            <TextBox x:Name="VideoSaveLocationTextBox" Grid.Column="0" IsReadOnly="True" />
+                            <Button x:Name="ChooseVideoFolderButton" Grid.Column="1" Content="Choose Folder"
+                                    Click="ChooseVideoFolderButton_Click" />
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- Audio save location (visible when Audio format is selected) -->
+                    <StackPanel x:Name="AudioSaveLocationRow" Spacing="6" Visibility="Collapsed">
+                        <TextBlock x:Name="AudioSaveLocationLabel" Text="Audio Save Location" Opacity="0.7" FontSize="12" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="AudioSaveLocationTextBox" Grid.Column="0" IsReadOnly="True" />
+                            <Button x:Name="ChooseAudioFolderButton" Grid.Column="1" Content="Choose Folder"
+                                    Click="ChooseAudioFolderButton_Click" />
                         </Grid>
                     </StackPanel>
 
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Extra Options" Opacity="0.7" FontSize="12" />
+                        <TextBlock x:Name="ExtraOptionsLabel" Text="Extra Options" Opacity="0.7" FontSize="12" />
                         <CheckBox x:Name="EmbedMetadataCheck" Content="Embed full Metadata (Title, Artist...)" IsChecked="True" />
                     </StackPanel>
 
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Thumbnail" Opacity="0.7" FontSize="12" />
+                        <TextBlock x:Name="ThumbnailLabel" Text="Thumbnail" Opacity="0.7" FontSize="12" />
                         <ComboBox x:Name="ThumbnailComboBox" HorizontalAlignment="Stretch" SelectedIndex="0">
                             <x:String>Embed into media file</x:String>
                             <x:String>Save alongside file</x:String>
@@ -352,8 +368,8 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Download Log" FontSize="18" FontWeight="SemiBold" />
-                    <HyperlinkButton Grid.Column="1" Content="Clear" Click="ClearLogButton_Click" />
+                    <TextBlock x:Name="DownloadLogTitle" Grid.Column="0" Text="Download Log" FontSize="18" FontWeight="SemiBold" />
+                    <HyperlinkButton x:Name="ClearLogButton" Grid.Column="1" Content="Clear" Click="ClearLogButton_Click" />
                 </Grid>
                 <Border CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
@@ -371,8 +387,8 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Download History" FontSize="18" FontWeight="SemiBold" />
-                    <HyperlinkButton Grid.Column="1" Content="Clear All" Click="ClearHistoryButton_Click" />
+                    <TextBlock x:Name="DownloadHistoryTitle" Grid.Column="0" Text="Download History" FontSize="18" FontWeight="SemiBold" />
+                    <HyperlinkButton x:Name="ClearHistoryButton" Grid.Column="1" Content="Clear All" Click="ClearHistoryButton_Click" />
                 </Grid>
 
                 <ItemsControl x:Name="HistoryList">
