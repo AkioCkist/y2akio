@@ -15,6 +15,7 @@ using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
+using y2akio.Views;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -26,7 +27,8 @@ namespace y2akio
     /// </summary>
     public partial class App : Application
     {
-        private Window? _window;
+        /// <summary>The app's main window. Pages use it to get a window handle for pickers (FolderPicker / FileOpenPicker).</summary>
+        public static Window MainWindow { get; private set; } = null!;
 
         /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
@@ -46,8 +48,8 @@ namespace y2akio
         /// <param name="args">Details about the launch request and process.</param>
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
-            _window = new MainWindow();
-            _window.Activate();
+            MainWindow = new MainWindow();
+            MainWindow.Activate();
         }
     }
 }
