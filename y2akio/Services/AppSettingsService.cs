@@ -1,5 +1,6 @@
 using System;
-using Windows.Storage;
+using System.IO;
+using System.Text.Json;
 
 namespace y2akio.Services;
 
@@ -14,62 +15,98 @@ public class AppSettingsChangedEventArgs : EventArgs
 }
 
 /// <summary>
-/// Singleton that persists user preferences (language, theme, save folders) in
-/// ApplicationData.Current.LocalSettings so they survive restarts.
+/// Singleton that persists user preferences (language, theme, save folders) in a JSON file under
+/// %LocalAppData%\Y2Akio\settings.json so they survive restarts.
+/// NOTE: storage is file-based on purpose — <c>Windows.Storage.ApplicationData</c> requires an
+/// MSIX package identity and throws in this unpackaged app.
 /// </summary>
 public class AppSettingsService
 {
     private static AppSettingsService? _instance;
     public static AppSettingsService Instance => _instance ??= new();
 
-    private readonly ApplicationDataContainer _store = ApplicationData.Current.LocalSettings;
+    private static readonly string SettingsPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Y2Akio", "settings.json");
+
+    private AppSettingsData _data = new();
 
     public event EventHandler<AppSettingsChangedEventArgs>? SettingsChanged;
 
-    public AppLanguage Language  { get; private set; }
-    public AppTheme    Theme     { get; private set; }
-    public string VideoSaveFolder { get; private set; }
-    public string AudioSaveFolder { get; private set; }
+    public AppLanguage Language { get => _data.Language; private set => _data.Language = value; }
+    public AppTheme    Theme    { get => _data.Theme;    private set => _data.Theme = value; }
+    public string VideoSaveFolder { get => _data.VideoSaveFolder; private set => _data.VideoSaveFolder = value; }
+    public string AudioSaveFolder { get => _data.AudioSaveFolder; private set => _data.AudioSaveFolder = value; }
 
     private AppSettingsService()
     {
         var downloads = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\Downloads";
 
-        Language = Enum.TryParse<AppLanguage>(_store.Values["Language"] as string, out var lang)
-            ? lang : AppLanguage.English;
+        try
+        {
+            if (File.Exists(SettingsPath))
+            {
+                var loaded = JsonSerializer.Deserialize<AppSettingsData>(File.ReadAllText(SettingsPath));
+                if (loaded != null) _data = loaded;
+            }
+        }
+        catch
+        {
+            // Corrupt/missing file → fall back to defaults.
+        }
 
-        Theme = Enum.TryParse<AppTheme>(_store.Values["Theme"] as string, out var theme)
-            ? theme : AppTheme.System;
+        if (string.IsNullOrWhiteSpace(VideoSaveFolder)) VideoSaveFolder = downloads;
+        if (string.IsNullOrWhiteSpace(AudioSaveFolder)) AudioSaveFolder = downloads;
+    }
 
-        VideoSaveFolder = _store.Values["VideoSaveFolder"] as string ?? downloads;
-        AudioSaveFolder = _store.Values["AudioSaveFolder"] as string ?? downloads;
+    private void Save()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(SettingsPath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(_data));
+        }
+        catch
+        {
+            // Settings persistence is best-effort; never crash over it.
+        }
     }
 
     public void SetLanguage(AppLanguage language)
     {
         Language = language;
-        _store.Values["Language"] = language.ToString();
+        Save();
         SettingsChanged?.Invoke(this, new AppSettingsChangedEventArgs { LanguageChanged = true });
     }
 
     public void SetTheme(AppTheme theme)
     {
         Theme = theme;
-        _store.Values["Theme"] = theme.ToString();
+        Save();
         SettingsChanged?.Invoke(this, new AppSettingsChangedEventArgs { ThemeChanged = true });
     }
 
     public void SetVideoSaveFolder(string path)
     {
         VideoSaveFolder = path;
-        _store.Values["VideoSaveFolder"] = path;
+        Save();
         SettingsChanged?.Invoke(this, new AppSettingsChangedEventArgs { SaveFolderChanged = true });
     }
 
     public void SetAudioSaveFolder(string path)
     {
         AudioSaveFolder = path;
-        _store.Values["AudioSaveFolder"] = path;
+        Save();
         SettingsChanged?.Invoke(this, new AppSettingsChangedEventArgs { SaveFolderChanged = true });
     }
+}
+
+/// <summary>Serializable settings payload. Enum values serialize as strings (System.Text.Json default).</summary>
+public class AppSettingsData
+{
+    public AppLanguage Language { get; set; } = AppLanguage.English;
+    public AppTheme    Theme    { get; set; } = AppTheme.System;
+    public string VideoSaveFolder { get; set; } = "";
+    public string AudioSaveFolder { get; set; } = "";
 }

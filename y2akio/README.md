@@ -127,6 +127,66 @@ xcopy ..\..\..\..\..\bin\ffmpeg-9.0.1-full_build .\bin\ /E
 Then double-click `y2akio.exe`. First run registers the toast AUMID + Start-menu
 shortcut; repeat the toast step on the new machine if notifications don't show.
 
+## Standard build (dev)
+
+```powershell
+# Debug build (fastest iteration)
+dotnet build -c Debug -p:Platform=x64
+
+# Run the built exe
+.\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\y2akio.exe
+```
+
+Or open the `.sln`/`.csproj` in Visual Studio and press **F5**. Visual Studio
+launches the unpackaged app directly — no MSIX install step.
+
+## Debugging after build
+
+If the app builds but crashes / won't open, walk through in order:
+
+**1. Run from a terminal and check the exit code.**
+GUI apps produce no console output, but a crash still returns a code:
+
+```powershell
+# PowerShell
+.\y2akio.exe; echo "exit=$LASTEXITCODE"
+```
+
+- `exit=127` in Git Bash → loader failed (missing DLL next to the exe).
+- Process starts then disappears within seconds → runtime exception, go to step 2.
+
+**2. Read the Windows Application event log.** The actual fault details land here:
+
+```powershell
+Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000,1026} -MaxEvents 20 |
+  Format-List TimeCreated, ProviderName, Message
+```
+
+- **Id 1000** (Application Error) → shows the faulting module + exception code.
+- **Id 1026** (.NET Runtime) → the full managed stack trace.
+- `0xc000027b` (STATUS_STOWED_EXCEPTION) in `Microsoft.UI.Xaml.dll` → an unhandled
+  exception during XAML load or navigation.
+
+**3. Known unpackaged-app gotchas** (all already handled in this codebase — don't
+reintroduce them):
+
+- `Windows.Storage.ApplicationData` **requires an MSIX package identity** and throws
+  in unpackaged apps. Persist to a file instead — see `AppSettingsService`
+  (`%LocalAppData%\Y2Akio\settings.json`).
+- `x:Bind`/`StaticResource` errors only surface at **runtime**, not compile time.
+  An undefined `Style="{StaticResource ...}"` or `Icon="..."` that isn't a real
+  `Symbol` name crashes the window at startup (e.g. `Failed to create
+  'IconElement' from the text '...'`). Use a `FontIcon` with a glyph for custom icons.
+- Event handlers that fire during `InitializeComponent` (a `ComboBox`
+  `SelectionChanged`, a `Slider` `ValueChanged`, a `CheckBox` `Checked`) can run
+  before other named controls are wired → **NullReferenceException**. Guard with
+  `if (SomeControl is null) return;` at the top of the handler.
+
+**4. Reproduce under the debugger.** In Visual Studio: set a breakpoint on the
+`App` constructor, step through, and let VS surface the exception. For a crash
+that only happens in the published (Release) exe, switch to Release config and
+F5 — trimming is disabled, so Debug/Release behavior should match.
+
 ## How to use
 
 1. **Paste a link** into the URL box and hit **Analyze** (or press Enter).
