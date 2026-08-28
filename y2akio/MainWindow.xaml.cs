@@ -584,4 +584,11 @@ public sealed partial class MainWindow : Window
             await _historyStore.SaveAsync(_history);
         }
     }
+    private void NavView_ItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
+    {
+        if (args.IsSettingsInvoked)
+        {
+            SettingsButton_Click(sender, new RoutedEventArgs());
+        }
+    }
 }
