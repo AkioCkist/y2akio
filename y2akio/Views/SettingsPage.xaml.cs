@@ -131,7 +131,8 @@ public sealed partial class SettingsPage : Page
         var has = s.HasCookies;
 
         ImportCookiesButton.Visibility = has ? Visibility.Collapsed : Visibility.Visible;
-        CookiesImportedPanel.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
+        DeleteCookiesButton.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
+        CookiesImportedStatus.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
         CookiesImportedStatus.Text = L("Settings.CookiesImported")
             + (string.IsNullOrEmpty(s.CookiesSourceName) ? "" : $" · {s.CookiesSourceName}");
     }

@@ -239,6 +239,12 @@
                                    Text="Login-gated content (X/Twitter, private reels). Stored encrypted."
                                    FontSize="12"
                                    Opacity="0.6" />
+                        <TextBlock x:Name="CookiesImportedStatus"
+                                   Text="Imported · encrypted"
+                                   FontSize="12"
+                                   Opacity="0.85"
+                                   TextTrimming="CharacterEllipsis"
+                                   Visibility="Collapsed" />
                     </StackPanel>
 
                     <StackPanel Grid.Column="1"
@@ -248,18 +254,10 @@
                         <Button x:Name="ImportCookiesButton"
                                 Content="Import..."
                                 Click="ImportCookiesButton_Click" />
-                        <StackPanel x:Name="CookiesImportedPanel"
-                                    Orientation="Horizontal"
-                                    Spacing="12"
-                                    VerticalAlignment="Center"
-                                    Visibility="Collapsed">
-                            <TextBlock x:Name="CookiesImportedStatus"
-                                       Text="Imported · encrypted"
-                                       VerticalAlignment="Center" />
-                            <Button x:Name="DeleteCookiesButton"
-                                    Content="Delete"
-                                    Click="DeleteCookiesButton_Click" />
-                        </StackPanel>
+                        <Button x:Name="DeleteCookiesButton"
+                                Content="Delete"
+                                Click="DeleteCookiesButton_Click"
+                                Visibility="Collapsed" />
                     </StackPanel>
                 </Grid>
             </Border>
@@ -273,10 +271,10 @@
                        Margin="4,16,0,4" />
 
             <Border CornerRadius="8"
-                    Padding="16,14"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1">
+                Padding="16,14"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -286,19 +284,48 @@
                     <StackPanel Grid.Column="0" Spacing="2">
                         <TextBlock Text="Y2Akio" FontSize="14" FontWeight="SemiBold" />
                         <TextBlock Text="Media downloader powered by yt-dlp"
-                                   FontSize="12"
-                                   Opacity="0.6" />
+                               FontSize="12"
+                               Opacity="0.6" />
                     </StackPanel>
 
-                    <TextBlock x:Name="VersionText"
-                               Grid.Column="1"
+                    <StackPanel Grid.Column="1" 
+                            Orientation="Horizontal" 
+                            Spacing="8" 
+                            VerticalAlignment="Center">
+                        <!-- Text Version -->
+                        <TextBlock x:Name="VersionText"
                                Text="v1.0.0"
                                FontSize="12"
                                Opacity="0.45"
-                               VerticalAlignment="Center" />
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+
+                        <!-- Nút Facebook -->
+                        <HyperlinkButton NavigateUri="https://www.facebook.com/danchoiteibuck"
+                                     ToolTipService.ToolTip="Facebook"
+                                     Padding="6"
+                                     Width="32"
+                                     Height="32">
+                            <Image Source="{ThemeResource FacebookIconSource}"
+                                   Width="16"
+                                   Height="16"
+                                   Stretch="Uniform" />
+                        </HyperlinkButton>
+
+                        <!-- Nút GitHub -->
+                        <HyperlinkButton NavigateUri="https://github.com/AkioCkist/y2akio"
+                                     ToolTipService.ToolTip="GitHub"
+                                     Padding="6"
+                                     Width="32"
+                                     Height="32">
+                            <Image Source="{ThemeResource GitHubIconSource}"
+                                   Width="16"
+                                   Height="16"
+                                   Stretch="Uniform" />
+                        </HyperlinkButton>
+                    </StackPanel>
                 </Grid>
             </Border>
-
         </StackPanel>
     </ScrollViewer>
 </Page>
