@@ -307,8 +307,8 @@
                                      Width="32"
                                      Height="32">
                             <Image Source="{ThemeResource FacebookIconSource}"
-                                   Width="16"
-                                   Height="16"
+                                   Width="18"
+                                   Height="18"
                                    Stretch="Uniform" />
                         </HyperlinkButton>
 
@@ -319,8 +319,8 @@
                                      Width="32"
                                      Height="32">
                             <Image Source="{ThemeResource GitHubIconSource}"
-                                   Width="16"
-                                   Height="16"
+                                   Width="18"
+                                   Height="18"
                                    Stretch="Uniform" />
                         </HyperlinkButton>
                     </StackPanel>

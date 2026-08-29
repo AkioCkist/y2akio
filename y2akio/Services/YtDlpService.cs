@@ -105,11 +105,13 @@ public class YtDlpService
 
     private async Task<string> RunDumpJsonAsync(string url, bool flat, string? cookiesPath, CancellationToken ct)
     {
+        url = NormalizeUrl(url);
+
         var args = new StringBuilder()
             .Append("--dump-single-json --no-warnings ")
             .Append(flat ? "--flat-playlist --playlist-items 1-500 " : "--no-playlist ")
             .Append(FfmpegLocationArg())
-            .Append(CookiesArg(cookiesPath))
+            .Append(CookiesArg(cookiesPath, url))
             .Append(ImpersonateArg(url))
             .Append($"\"{url}\"");
 
@@ -124,8 +126,24 @@ public class YtDlpService
         return stdout;
     }
 
-    private static string CookiesArg(string? cookiesPath) =>
-        string.IsNullOrWhiteSpace(cookiesPath) ? "" : $"--cookies \"{cookiesPath}\" ";
+    /// <summary>
+    /// Passes the imported cookie jar to yt-dlp — except for YouTube. The imported file is the
+    /// browser's *whole* jar, and sending it to YouTube trips Google's bot check
+    /// ("The page needs to be reloaded"); YouTube extracts fine anonymously. Cookies only matter
+    /// for login-gated content (X/Twitter, Facebook private/stories, ...).
+    /// </summary>
+    private static string CookiesArg(string? cookiesPath, string url)
+    {
+        if (string.IsNullOrWhiteSpace(cookiesPath)) return "";
+        if (IsYouTubeUrl(url)) return "";
+        return $"--cookies \"{cookiesPath}\" ";
+    }
+
+    private static bool IsYouTubeUrl(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && (uri.Host.EndsWith("youtube.com", StringComparison.OrdinalIgnoreCase)
+            || uri.Host.EndsWith("youtube-nocookie.com", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(uri.Host, "youtu.be", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Facebook/Instagram regularly bot-blocks plain requests, which surfaces as
@@ -142,6 +160,24 @@ public class YtDlpService
             || uri.Host.EndsWith("fb.watch", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
+    /// yt-dlp's facebook extractor does not recognize `/stories/<id>/<token>/` URLs at all
+    /// ("Unsupported URL"), even with valid cookies. But the story ID is the video ID, and the
+    /// extractor *does* handle `watch/?v=&lt;id&gt;` — so rewrite story links to that form
+    /// before passing them on. (Anonymous story links also just redirect to login.php.)
+    /// </summary>
+    private static string NormalizeUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return url;
+        if (!uri.Host.EndsWith("facebook.com", StringComparison.OrdinalIgnoreCase)) return url;
+        if (!uri.AbsolutePath.StartsWith("/stories/", StringComparison.OrdinalIgnoreCase)) return url;
+
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 2 || !long.TryParse(segments[1], out _)) return url;
+
+        return $"{uri.Scheme}://{uri.Host}/watch/?v={segments[1]}";
+    }
+
+    /// <summary>
     /// Downloads according to the given request, reporting progress parsed from yt-dlp's stdout.
     /// Returns the final saved file path (best-effort — yt-dlp prints it in a "[download] Destination: ..."
     /// or "[Merger] Merging formats into ..." line).
@@ -155,11 +191,12 @@ public class YtDlpService
     {
         Directory.CreateDirectory(req.SaveFolder);
 
+        var url = NormalizeUrl(req.Url);
         var outputTemplate = BuildOutputTemplate(req);
         var args = new StringBuilder();
         args.Append("--newline "); // one progress line per update, easier to parse
         args.Append(FfmpegLocationArg());
-        args.Append(CookiesArg(req.CookiesPath));
+        args.Append(CookiesArg(req.CookiesPath, url));
         args.Append(ImpersonateArg(req.Url));
         args.Append($"-o \"{outputTemplate}\" ");
 
@@ -201,7 +238,7 @@ public class YtDlpService
                 args.Append("--embed-subs "); // embed into the video, don't leave loose files
         }
 
-        args.Append($"\"{req.Url}\"");
+        args.Append($"\"{url}\"");
 
         string? resolvedPath = null;
         var destinationRegex = new Regex(@"Destination:\s*(.+)$", RegexOptions.Compiled);
