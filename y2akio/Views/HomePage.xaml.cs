@@ -218,7 +218,7 @@ public sealed partial class HomePage : Page
 
         try
         {
-            var result = await _ytDlp.AnalyzeAsync(url);
+            var result = await _ytDlp.AnalyzeAsync(url, AppSettingsService.Instance.CookiesFilePath);
 
             if (result.IsPlaylist && result.Playlist is { } playlist)
             {
@@ -279,7 +279,7 @@ public sealed partial class HomePage : Page
 
         try
         {
-            var video = await _ytDlp.AnalyzeVideoAsync(entry.Url);
+            var video = await _ytDlp.AnalyzeVideoAsync(entry.Url, AppSettingsService.Instance.CookiesFilePath);
             _currentVideo = video;
             PopulateOptionsPanel(video);
             OptionsPanel.Visibility = Visibility.Visible;
@@ -562,6 +562,7 @@ public sealed partial class HomePage : Page
             Url = url,
             Kind = isVideo ? MediaKind.Video : MediaKind.Audio,
             SaveFolder = saveFolder,
+            CookiesPath = AppSettingsService.Instance.CookiesFilePath,
             TargetHeight = targetHeight,
             ContainerFormat = (ContainerComboBox.SelectedItem as string ?? "MP4").ToLowerInvariant(),
             AudioBitrateKbps = audioKbps,

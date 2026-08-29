@@ -12,6 +12,7 @@ public class AppSettingsChangedEventArgs : EventArgs
     public bool ThemeChanged { get; init; }
     public bool LanguageChanged { get; init; }
     public bool SaveFolderChanged { get; init; }
+    public bool CookiesChanged { get; init; }
 }
 
 /// <summary>
@@ -37,6 +38,7 @@ public class AppSettingsService
     public AppTheme    Theme    { get => _data.Theme;    private set => _data.Theme = value; }
     public string VideoSaveFolder { get => _data.VideoSaveFolder; private set => _data.VideoSaveFolder = value; }
     public string AudioSaveFolder { get => _data.AudioSaveFolder; private set => _data.AudioSaveFolder = value; }
+    public string CookiesFilePath { get => _data.CookiesFilePath; private set => _data.CookiesFilePath = value; }
 
     private AppSettingsService()
     {
@@ -57,6 +59,7 @@ public class AppSettingsService
 
         if (string.IsNullOrWhiteSpace(VideoSaveFolder)) VideoSaveFolder = downloads;
         if (string.IsNullOrWhiteSpace(AudioSaveFolder)) AudioSaveFolder = downloads;
+        if (CookiesFilePath is null) CookiesFilePath = "";
     }
 
     private void Save()
@@ -100,6 +103,13 @@ public class AppSettingsService
         Save();
         SettingsChanged?.Invoke(this, new AppSettingsChangedEventArgs { SaveFolderChanged = true });
     }
+
+    public void SetCookiesFilePath(string path)
+    {
+        CookiesFilePath = path ?? "";
+        Save();
+        SettingsChanged?.Invoke(this, new AppSettingsChangedEventArgs { CookiesChanged = true });
+    }
 }
 
 /// <summary>Serializable settings payload. Enum values serialize as strings (System.Text.Json default).</summary>
@@ -109,4 +119,5 @@ public class AppSettingsData
     public AppTheme    Theme    { get; set; } = AppTheme.System;
     public string VideoSaveFolder { get; set; } = "";
     public string AudioSaveFolder { get; set; } = "";
+    public string CookiesFilePath { get; set; } = "";
 }

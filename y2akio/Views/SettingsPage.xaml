@@ -177,12 +177,12 @@
                     HorizontalAlignment="Stretch"
                     Margin="16,0" />
 
-            <!-- Audio folder row (bottom of group) -->
-            <Border CornerRadius="0,0,8,8"
+            <!-- Audio folder row (middle of group) -->
+            <Border CornerRadius="0,0,0,0"
                     Padding="16,14"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1,0,1,1">
+                    BorderThickness="1,0,1,0">
                 <Grid ColumnSpacing="12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -210,6 +210,49 @@
                             Content="Browse..."
                             VerticalAlignment="Center"
                             Click="BrowseAudioButton_Click" />
+                </Grid>
+            </Border>
+
+            <!-- Separator line between card rows -->
+            <Border Height="1"
+                    Background="{ThemeResource CardStrokeColorDefaultBrush}"
+                    HorizontalAlignment="Stretch"
+                    Margin="16,0" />
+
+            <!-- Cookies row (bottom of group) — needed for login-gated sites like X/Twitter -->
+            <Border CornerRadius="0,0,8,8"
+                    Padding="16,14"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1,0,1,1">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock x:Name="CookiesTitle"
+                                   Text="Browser cookies (cookies.txt)"
+                                   FontSize="14" />
+                        <TextBlock x:Name="CookiesDesc"
+                                   Text="Required for login-gated content (e.g. X/Twitter videos)"
+                                   FontSize="12"
+                                   Opacity="0.6" />
+                    </StackPanel>
+
+                    <TextBox x:Name="CookiesBox"
+                             Grid.Column="1"
+                             IsReadOnly="True"
+                             VerticalAlignment="Center"
+                             PlaceholderText="(none set)" />
+
+                    <Button x:Name="BrowseCookiesButton"
+                            Grid.Column="2"
+                            Content="Browse..."
+                            VerticalAlignment="Center"
+                            Click="BrowseCookiesButton_Click" />
                 </Grid>
             </Border>
 

@@ -95,6 +95,8 @@ public static class LocalizationService
         ["Settings.VideoFolderDesc"]  = D("Default location for video downloads", "Thư mục mặc định để lưu video"),
         ["Settings.AudioFolder"]      = D("Audio save folder",   "Thư mục lưu âm thanh"),
         ["Settings.AudioFolderDesc"]  = D("Default location for audio downloads", "Thư mục mặc định để lưu âm thanh"),
+        ["Settings.Cookies"]          = D("Browser cookies (cookies.txt)", "Cookie trình duyệt (cookies.txt)"),
+        ["Settings.CookiesDesc"]      = D("Required for login-gated content (e.g. X/Twitter videos)", "Cần thiết cho nội dung yêu cầu đăng nhập (vd: video X/Twitter)"),
         ["Settings.Browse"]           = D("Browse...",           "Duyệt..."),
         ["Settings.About"]            = D("About",               "Thông tin"),
         ["Settings.AppVersion"]       = D("Version",             "Phiên bản"),

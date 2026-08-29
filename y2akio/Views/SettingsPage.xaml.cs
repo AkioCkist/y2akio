@@ -45,6 +45,7 @@ public sealed partial class SettingsPage : Page
 
         VideoFolderBox.Text = s.VideoSaveFolder;
         AudioFolderBox.Text = s.AudioSaveFolder;
+        CookiesBox.Text = s.CookiesFilePath;
     }
 
     // ─── Localization ────────────────────────────────────────────────────────
@@ -68,6 +69,9 @@ public sealed partial class SettingsPage : Page
         AudioFolderDesc.Text        = L("Settings.AudioFolderDesc");
         BrowseVideoButton.Content   = L("Settings.Browse");
         BrowseAudioButton.Content   = L("Settings.Browse");
+        CookiesTitle.Text           = L("Settings.Cookies");
+        CookiesDesc.Text            = L("Settings.CookiesDesc");
+        BrowseCookiesButton.Content = L("Settings.Browse");
         AboutSectionHeader.Text     = L("Settings.About");
     }
 
@@ -116,6 +120,22 @@ public sealed partial class SettingsPage : Page
         if (folder is null) return;
         AudioFolderBox.Text = folder.Path;
         AppSettingsService.Instance.SetAudioSaveFolder(folder.Path);
+    }
+
+    private async void BrowseCookiesButton_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileOpenPicker
+        {
+            SuggestedStartLocation = PickerLocationId.Desktop,
+        };
+        picker.FileTypeFilter.Add(".txt");
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+        var file = await picker.PickSingleFileAsync();
+        if (file is null) return;
+        CookiesBox.Text = file.Path;
+        AppSettingsService.Instance.SetCookiesFilePath(file.Path);
     }
 
     private static async Task<StorageFolder?> PickFolderAsync()

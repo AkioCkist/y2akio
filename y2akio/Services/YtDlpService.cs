@@ -42,6 +42,9 @@ public class DownloadRequest
 
     public bool EmbedMetadata { get; init; } = true;
 
+    /// <summary>Path to a Netscape-format cookies.txt file, passed to yt-dlp via --cookies (needed for login-gated sites like X/Twitter). Empty = no cookies.</summary>
+    public string CookiesPath { get; init; } = "";
+
     // "embed" -> --embed-thumbnail, "save" -> write thumbnail alongside file, "none" -> skip
     public string ThumbnailMode { get; init; } = "embed";
 }
@@ -71,9 +74,10 @@ public class YtDlpService
     /// those get fetched lazily via <see cref="AnalyzeVideoAsync"/> when a specific track is clicked).
     /// Otherwise falls through to a full single-video analyze.
     /// </summary>
-    public async Task<AnalyzeResult> AnalyzeAsync(string url, CancellationToken ct = default)
+    /// <param name="cookiesPath">Netscape cookies.txt path for login-gated sites (X/Twitter, ...). Null/empty = no cookies.</param>
+    public async Task<AnalyzeResult> AnalyzeAsync(string url, string? cookiesPath = null, CancellationToken ct = default)
     {
-        var flatJson = await RunDumpJsonAsync(url, flat: true, ct);
+        var flatJson = await RunDumpJsonAsync(url, flat: true, cookiesPath, ct);
 
         using (var doc = JsonDocument.Parse(flatJson))
         {
@@ -87,23 +91,25 @@ public class YtDlpService
             }
         }
 
-        var video = await AnalyzeVideoAsync(url, ct);
+        var video = await AnalyzeVideoAsync(url, cookiesPath, ct);
         return new AnalyzeResult { IsPlaylist = false, Video = video };
     }
 
     /// <summary>Runs a full (non-flat) `yt-dlp --dump-single-json <url>` for one specific video, formats included.</summary>
-    public async Task<VideoInfo> AnalyzeVideoAsync(string url, CancellationToken ct = default)
+    /// <param name="cookiesPath">Netscape cookies.txt path for login-gated sites (X/Twitter, ...). Null/empty = no cookies.</param>
+    public async Task<VideoInfo> AnalyzeVideoAsync(string url, string? cookiesPath = null, CancellationToken ct = default)
     {
-        var json = await RunDumpJsonAsync(url, flat: false, ct);
+        var json = await RunDumpJsonAsync(url, flat: false, cookiesPath, ct);
         return VideoInfo.FromJson(json, url);
     }
 
-    private async Task<string> RunDumpJsonAsync(string url, bool flat, CancellationToken ct)
+    private async Task<string> RunDumpJsonAsync(string url, bool flat, string? cookiesPath, CancellationToken ct)
     {
         var args = new StringBuilder()
             .Append("--dump-single-json --no-warnings ")
             .Append(flat ? "--flat-playlist --playlist-items 1-500 " : "--no-playlist ")
             .Append(FfmpegLocationArg())
+            .Append(CookiesArg(cookiesPath))
             .Append($"\"{url}\"");
 
         var (stdout, stderr, exitCode) = await RunProcessAsync(args.ToString(), ct);
@@ -116,6 +122,9 @@ public class YtDlpService
 
         return stdout;
     }
+
+    private static string CookiesArg(string? cookiesPath) =>
+        string.IsNullOrWhiteSpace(cookiesPath) ? "" : $"--cookies \"{cookiesPath}\" ";
 
     /// <summary>
     /// Downloads according to the given request, reporting progress parsed from yt-dlp's stdout.
@@ -135,6 +144,7 @@ public class YtDlpService
         var args = new StringBuilder();
         args.Append("--newline "); // one progress line per update, easier to parse
         args.Append(FfmpegLocationArg());
+        args.Append(CookiesArg(req.CookiesPath));
         args.Append($"-o \"{outputTemplate}\" ");
 
         if (req.Kind == MediaKind.Audio)

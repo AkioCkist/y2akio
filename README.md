@@ -25,6 +25,9 @@ download. Fluent/WinUI 3 UI, .NET 8, Windows App SDK.
 - **Windows toast on completion** — click the toast to open the save folder in
   Explorer.
 - **Persistent history** — download history saved to `%LocalAppData%\Y2Akio\history.json`.
+- **Browser cookies (cookies.txt)** — set in Settings → Download. Passed to yt-dlp via
+  `--cookies`, needed for login-gated content (X/Twitter videos, private/age-restricted
+  media).
 
 ## Requirements
 
@@ -227,6 +230,12 @@ Helpers/ThumbnailHelper.cs  URL -> BitmapImage for playlist rows
 
 - **"Couldn't analyze that link"** — yt-dlp error shown in the red InfoBar; full
   stderr also lands in the log panel. Check you're online and the URL is valid.
+- **X/Twitter: `No video could be found in this tweet`** — the tweet's video is
+  login-gated; anonymous yt-dlp can't see it. Export your X session cookies to a
+  Netscape-format `cookies.txt` (browser extension such as "Get cookies.txt LOCALLY",
+  or `yt-dlp --cookies-from-browser edge` from a logged-in machine) and set it in
+  **Settings → Download → Browser cookies**. The app then passes `--cookies` on
+  analyze and download.
 - **No audio / no merge / leftover `.part`** — ffmpeg not found. Confirm it's in
   `bin` (see above).
 - **No toast on download** — run the app once more after launch; registration
