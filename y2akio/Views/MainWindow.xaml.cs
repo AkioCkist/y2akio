@@ -47,6 +47,9 @@ public sealed partial class MainWindow : Window
             if (args.ThemeChanged)
                 DispatcherQueue.TryEnqueue(() => ApplyTheme(AppSettingsService.Instance.Theme));
         };
+
+        // ── Security: never leave the decrypted cookies.txt behind after the window closes ──
+        Closed += (_, _) => AppSettingsService.Instance.CleanupCookiesFile();
     }
 
     // ─── Theme helper ────────────────────────────────────────────────────────

@@ -216,9 +216,11 @@ public sealed partial class HomePage : Page
         AnalyzingRing.IsActive = true;
         AnalyzeButton.IsEnabled = false;
 
+        string cookiesPath = "";
         try
         {
-            var result = await _ytDlp.AnalyzeAsync(url, AppSettingsService.Instance.CookiesFilePath);
+            cookiesPath = await AppSettingsService.Instance.GetCookiesFilePathAsync();
+            var result = await _ytDlp.AnalyzeAsync(url, cookiesPath);
 
             if (result.IsPlaylist && result.Playlist is { } playlist)
             {
@@ -240,6 +242,7 @@ public sealed partial class HomePage : Page
         }
         finally
         {
+            if (!string.IsNullOrEmpty(cookiesPath)) AppSettingsService.Instance.CleanupCookiesFile();
             AnalyzingRing.IsActive = false;
             AnalyzeButton.IsEnabled = true;
         }
@@ -277,9 +280,11 @@ public sealed partial class HomePage : Page
         AnalyzingRing.IsActive = true;
         DownloadPlaylistButton.IsEnabled = false;
 
+        string cookiesPath = "";
         try
         {
-            var video = await _ytDlp.AnalyzeVideoAsync(entry.Url, AppSettingsService.Instance.CookiesFilePath);
+            cookiesPath = await AppSettingsService.Instance.GetCookiesFilePathAsync();
+            var video = await _ytDlp.AnalyzeVideoAsync(entry.Url, cookiesPath);
             _currentVideo = video;
             PopulateOptionsPanel(video);
             OptionsPanel.Visibility = Visibility.Visible;
@@ -291,6 +296,7 @@ public sealed partial class HomePage : Page
         }
         finally
         {
+            if (!string.IsNullOrEmpty(cookiesPath)) AppSettingsService.Instance.CleanupCookiesFile();
             AnalyzingRing.IsActive = false;
             DownloadPlaylistButton.IsEnabled = true;
         }
@@ -319,8 +325,10 @@ public sealed partial class HomePage : Page
             DownloadStatusText.Text = p.StatusText;
         });
 
+        string cookiesPath = "";
         try
         {
+            cookiesPath = await AppSettingsService.Instance.GetCookiesFilePathAsync();
             var completed = 0;
             foreach (var entry in selected)
             {
@@ -329,7 +337,7 @@ public sealed partial class HomePage : Page
                 DownloadProgressBar.Value = 0;
                 AppendLog($"=== ({completed}/{selected.Count}) {entry.Title} ===");
 
-                var request = BuildDownloadRequest(entry.Url, isVideo, qualitySelection);
+                var request = BuildDownloadRequest(entry.Url, isVideo, qualitySelection, cookiesPath);
                 var savedPath = await _ytDlp.DownloadAsync(request, progress, _downloadCts.Token, AppendLog);
                 AppendLog($"Saved: {savedPath}");
 
@@ -355,6 +363,7 @@ public sealed partial class HomePage : Page
         }
         finally
         {
+            if (!string.IsNullOrEmpty(cookiesPath)) AppSettingsService.Instance.CleanupCookiesFile();
             DownloadPlaylistButton.IsEnabled = true;
         }
     }
@@ -538,7 +547,7 @@ public sealed partial class HomePage : Page
 
     // ─── Download ─────────────────────────────────────────────────────────────
 
-    private DownloadRequest BuildDownloadRequest(string url, bool isVideo, string qualitySelection)
+    private DownloadRequest BuildDownloadRequest(string url, bool isVideo, string qualitySelection, string cookiesPath)
     {
         int? targetHeight = null;
         int? audioKbps = null;
@@ -562,7 +571,7 @@ public sealed partial class HomePage : Page
             Url = url,
             Kind = isVideo ? MediaKind.Video : MediaKind.Audio,
             SaveFolder = saveFolder,
-            CookiesPath = AppSettingsService.Instance.CookiesFilePath,
+            CookiesPath = cookiesPath,
             TargetHeight = targetHeight,
             ContainerFormat = (ContainerComboBox.SelectedItem as string ?? "MP4").ToLowerInvariant(),
             AudioBitrateKbps = audioKbps,
@@ -626,7 +635,8 @@ public sealed partial class HomePage : Page
 
         var isVideo = VideoFormatToggle.IsChecked == true;
         var qualitySelection = QualityComboBox.SelectedItem as string ?? "";
-        var request = BuildDownloadRequest(_currentVideo.OriginalUrl, isVideo, qualitySelection);
+        string cookiesPath = await AppSettingsService.Instance.GetCookiesFilePathAsync();
+        var request = BuildDownloadRequest(_currentVideo.OriginalUrl, isVideo, qualitySelection, cookiesPath);
 
         DownloadNowButton.IsEnabled = false;
         DownloadProgressBar.Visibility = Visibility.Visible;
@@ -668,6 +678,7 @@ public sealed partial class HomePage : Page
         }
         finally
         {
+            if (!string.IsNullOrEmpty(cookiesPath)) AppSettingsService.Instance.CleanupCookiesFile();
             DownloadNowButton.IsEnabled = true;
         }
     }

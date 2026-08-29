@@ -219,7 +219,7 @@
                     HorizontalAlignment="Stretch"
                     Margin="16,0" />
 
-            <!-- Cookies row (bottom of group) — needed for login-gated sites like X/Twitter -->
+            <!-- Cookies row (bottom of group) — login-gated content; content encrypted at rest -->
             <Border CornerRadius="0,0,8,8"
                     Padding="16,14"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
@@ -228,7 +228,6 @@
                 <Grid ColumnSpacing="12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="2*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
@@ -237,22 +236,31 @@
                                    Text="Browser cookies (cookies.txt)"
                                    FontSize="14" />
                         <TextBlock x:Name="CookiesDesc"
-                                   Text="Required for login-gated content (e.g. X/Twitter videos)"
+                                   Text="Login-gated content (X/Twitter, private reels). Stored encrypted."
                                    FontSize="12"
                                    Opacity="0.6" />
                     </StackPanel>
 
-                    <TextBox x:Name="CookiesBox"
-                             Grid.Column="1"
-                             IsReadOnly="True"
-                             VerticalAlignment="Center"
-                             PlaceholderText="(none set)" />
-
-                    <Button x:Name="BrowseCookiesButton"
-                            Grid.Column="2"
-                            Content="Browse..."
-                            VerticalAlignment="Center"
-                            Click="BrowseCookiesButton_Click" />
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                Spacing="12"
+                                VerticalAlignment="Center">
+                        <Button x:Name="ImportCookiesButton"
+                                Content="Import..."
+                                Click="ImportCookiesButton_Click" />
+                        <StackPanel x:Name="CookiesImportedPanel"
+                                    Orientation="Horizontal"
+                                    Spacing="12"
+                                    VerticalAlignment="Center"
+                                    Visibility="Collapsed">
+                            <TextBlock x:Name="CookiesImportedStatus"
+                                       Text="Imported · encrypted"
+                                       VerticalAlignment="Center" />
+                            <Button x:Name="DeleteCookiesButton"
+                                    Content="Delete"
+                                    Click="DeleteCookiesButton_Click" />
+                        </StackPanel>
+                    </StackPanel>
                 </Grid>
             </Border>
 

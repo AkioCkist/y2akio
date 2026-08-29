@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace y2akio.Services;
 
@@ -38,7 +39,8 @@ public class AppSettingsService
     public AppTheme    Theme    { get => _data.Theme;    private set => _data.Theme = value; }
     public string VideoSaveFolder { get => _data.VideoSaveFolder; private set => _data.VideoSaveFolder = value; }
     public string AudioSaveFolder { get => _data.AudioSaveFolder; private set => _data.AudioSaveFolder = value; }
-    public string CookiesFilePath { get => _data.CookiesFilePath; private set => _data.CookiesFilePath = value; }
+    public bool HasCookies => !string.IsNullOrWhiteSpace(_data.CookiesEncrypted);
+    public string CookiesSourceName => _data.CookiesSourceName ?? "";
 
     private AppSettingsService()
     {
@@ -59,7 +61,9 @@ public class AppSettingsService
 
         if (string.IsNullOrWhiteSpace(VideoSaveFolder)) VideoSaveFolder = downloads;
         if (string.IsNullOrWhiteSpace(AudioSaveFolder)) AudioSaveFolder = downloads;
-        if (CookiesFilePath is null) CookiesFilePath = "";
+
+        // No cookies configured → make sure no leftover plaintext cookie file survives a past session.
+        if (!HasCookies) CleanupCookiesFile();
     }
 
     private void Save()
@@ -104,12 +108,68 @@ public class AppSettingsService
         SettingsChanged?.Invoke(this, new AppSettingsChangedEventArgs { SaveFolderChanged = true });
     }
 
-    public void SetCookiesFilePath(string path)
+    /// <summary>
+    /// Encrypts the imported cookies.txt content (DPAPI, current Windows user only) and persists
+    /// the blob. Plaintext is never written to settings.json.
+    /// </summary>
+    public async Task SetCookiesDataAsync(string plaintext, string sourceName)
     {
-        CookiesFilePath = path ?? "";
+        if (string.IsNullOrWhiteSpace(plaintext))
+        {
+            ClearCookiesData();
+            return;
+        }
+
+        _data.CookiesEncrypted = await CookiesProtector.ProtectAsync(plaintext);
+        _data.CookiesSourceName = sourceName ?? "";
         Save();
         SettingsChanged?.Invoke(this, new AppSettingsChangedEventArgs { CookiesChanged = true });
     }
+
+    /// <summary>Removes the imported cookie data and any decrypted temp file. State resets to "not imported".</summary>
+    public void ClearCookiesData()
+    {
+        _data.CookiesEncrypted = "";
+        _data.CookiesSourceName = "";
+        CleanupCookiesFile();
+        Save();
+        SettingsChanged?.Invoke(this, new AppSettingsChangedEventArgs { CookiesChanged = true });
+    }
+
+    /// <summary>Decrypts the stored blob, or null when there is nothing / decryption fails (other user, other machine).</summary>
+    public async Task<string?> DecryptCookiesAsync() =>
+        HasCookies ? await CookiesProtector.UnprotectAsync(_data.CookiesEncrypted) : null;
+
+    /// <summary>
+    /// Path to a decrypted cookies.txt yt-dlp can consume. Written on demand into the app's own
+    /// data folder (not TEMP), and deleted again via <see cref="CleanupCookiesFile"/> once the
+    /// analyze/download is done. Empty string = no cookies configured.
+    /// </summary>
+    public async Task<string> GetCookiesFilePathAsync()
+    {
+        if (!HasCookies) return "";
+        var plain = await DecryptCookiesAsync();
+        if (string.IsNullOrWhiteSpace(plain)) return "";
+
+        var path = DecryptedCookiesPath;
+        try
+        {
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            await File.WriteAllTextAsync(path, plain);
+        }
+        catch { return ""; }
+        return path;
+    }
+
+    /// <summary>Deletes the plaintext cookie temp file so nothing sensitive lingers on disk.</summary>
+    public void CleanupCookiesFile()
+    {
+        try { if (File.Exists(DecryptedCookiesPath)) File.Delete(DecryptedCookiesPath); } catch { /* best-effort */ }
+    }
+
+    private static string DecryptedCookiesPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Y2Akio", "cookies.txt");
 }
 
 /// <summary>Serializable settings payload. Enum values serialize as strings (System.Text.Json default).</summary>
@@ -119,5 +179,6 @@ public class AppSettingsData
     public AppTheme    Theme    { get; set; } = AppTheme.System;
     public string VideoSaveFolder { get; set; } = "";
     public string AudioSaveFolder { get; set; } = "";
-    public string CookiesFilePath { get; set; } = "";
+    public string CookiesEncrypted { get; set; } = "";   // base64 DPAPI blob — never plaintext
+    public string CookiesSourceName { get; set; } = "";  // just the filename, for display
 }

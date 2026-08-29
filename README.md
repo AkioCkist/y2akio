@@ -25,9 +25,9 @@ download. Fluent/WinUI 3 UI, .NET 8, Windows App SDK.
 - **Windows toast on completion** — click the toast to open the save folder in
   Explorer.
 - **Persistent history** — download history saved to `%LocalAppData%\Y2Akio\history.json`.
-- **Browser cookies (cookies.txt)** — set in Settings → Download. Passed to yt-dlp via
-  `--cookies`, needed for login-gated content (X/Twitter videos, private/age-restricted
-  media).
+- **Browser cookies (cookies.txt)** — import once in Settings → Download; the content is
+  **encrypted at rest** (DPAPI-NG, current Windows user only) and passed to yt-dlp via
+  `--cookies` for login-gated content (X/Twitter videos, private/age-restricted media).
 
 ## Requirements
 
@@ -208,6 +208,49 @@ F5 — trimming is disabled, so Debug/Release behavior should match.
    get a Windows toast — clicking it opens the save folder.
 5. **Download history** persists below; replay/`copy path`/open folder/delete from
    the per-row buttons.
+
+## Cookie storage & encryption (how it works)
+
+Imported cookies are **sensitive** — they let anyone replay your logged-in browser
+session. The app never stores the file as-is.
+
+**1. Import — encrypt immediately**
+
+Settings → Download → **Import...** lets you pick *any* file (name doesn't matter, the
+content is read). The text is encrypted **before anything touches disk** using Windows
+**DPAPI-NG** (`Windows.Security.Cryptography.DataProtection.DataProtectionProvider` with
+the `LOCAL=user` descriptor — `Services/CookiesProtector.cs`):
+
+- The encryption key is derived and held **by Windows**, tied to the **current Windows
+  user account on the current machine**. No passphrase, no key file, nothing extra to
+  back up — and nothing that can be stolen from the repo.
+- Only the base64 **ciphertext** is persisted, as the `CookiesEncrypted` field inside
+  `%LocalAppData%\Y2Akio\settings.json`. The raw cookies.txt never appears in settings.
+
+**2. Use — decrypt only for the moment it's needed**
+
+When you Analyze or Download, the blob is decrypted **in memory**, written to a temp file
+at `%LocalAppData%\Y2Akio\cookies.txt` (the app's own folder, **not** `%TEMP%`), passed to
+yt-dlp as `--cookies "path"`, then **deleted immediately** after the operation finishes.
+It is also deleted on app close and whenever you press **Delete** in Settings. So
+plaintext cookies exist on disk only for the seconds an actual yt-dlp run needs the file.
+
+**3. Delete — full reset**
+
+**Delete** in Settings removes the encrypted blob *and* the decrypted temp file, then the
+row flips back to the empty "Import..." state. Nothing sensitive is left behind.
+
+**Security boundaries — read these**
+
+- **Same user, same machine only.** DPAPI `LOCAL=user` means the blob decrypts only on
+  the machine and user that imported it. Copy `settings.json` to another PC or user →
+  decryption fails → the app treats it as "no cookies". You'd re-import there.
+- **Plaintext window.** During an active analyze/download the decrypted temp file is real
+  plaintext readable by any process running as your user — that's the same trust boundary
+  as your browser having the cookies live in its profile, and it's unavoidable because
+  yt-dlp requires a real file path. The file only exists while the operation runs.
+- **No encryption on the wire.** Cookies are sent to the site over HTTPS as part of
+  normal browsing, same as your browser does.
 
 ## Project layout
 

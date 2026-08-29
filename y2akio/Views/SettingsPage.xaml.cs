@@ -45,7 +45,7 @@ public sealed partial class SettingsPage : Page
 
         VideoFolderBox.Text = s.VideoSaveFolder;
         AudioFolderBox.Text = s.AudioSaveFolder;
-        CookiesBox.Text = s.CookiesFilePath;
+        UpdateCookiesState();
     }
 
     // ─── Localization ────────────────────────────────────────────────────────
@@ -71,7 +71,9 @@ public sealed partial class SettingsPage : Page
         BrowseAudioButton.Content   = L("Settings.Browse");
         CookiesTitle.Text           = L("Settings.Cookies");
         CookiesDesc.Text            = L("Settings.CookiesDesc");
-        BrowseCookiesButton.Content = L("Settings.Browse");
+        ImportCookiesButton.Content = L("Settings.CookiesImport");
+        DeleteCookiesButton.Content = L("Settings.CookiesDelete");
+        UpdateCookiesState();
         AboutSectionHeader.Text     = L("Settings.About");
     }
 
@@ -122,20 +124,57 @@ public sealed partial class SettingsPage : Page
         AppSettingsService.Instance.SetAudioSaveFolder(folder.Path);
     }
 
-    private async void BrowseCookiesButton_Click(object sender, RoutedEventArgs e)
+    /// <summary>Switches the row between "import" and "imported (encrypted) + delete" states.</summary>
+    private void UpdateCookiesState()
+    {
+        var s = AppSettingsService.Instance;
+        var has = s.HasCookies;
+
+        ImportCookiesButton.Visibility = has ? Visibility.Collapsed : Visibility.Visible;
+        CookiesImportedPanel.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
+        CookiesImportedStatus.Text = L("Settings.CookiesImported")
+            + (string.IsNullOrEmpty(s.CookiesSourceName) ? "" : $" · {s.CookiesSourceName}");
+    }
+
+    private async void ImportCookiesButton_Click(object sender, RoutedEventArgs e)
     {
         var picker = new FileOpenPicker
         {
-            SuggestedStartLocation = PickerLocationId.Desktop,
+            SuggestedStartLocation = PickerLocationId.Downloads,
         };
-        picker.FileTypeFilter.Add(".txt");
+        picker.FileTypeFilter.Add("*"); // any file — the name doesn't matter, we read the content
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
         WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
 
         var file = await picker.PickSingleFileAsync();
         if (file is null) return;
-        CookiesBox.Text = file.Path;
-        AppSettingsService.Instance.SetCookiesFilePath(file.Path);
+
+        try
+        {
+            var text = await FileIO.ReadTextAsync(file);
+            if (string.IsNullOrWhiteSpace(text))
+                return; // empty file — nothing to import
+
+            await AppSettingsService.Instance.SetCookiesDataAsync(text, file.Name);
+            UpdateCookiesState();
+        }
+        catch (Exception ex)
+        {
+            var dialog = new ContentDialog
+            {
+                Title = L("Settings.CookiesImportError"),
+                Content = ex.Message,
+                CloseButtonText = L("Settings.Ok"),
+                XamlRoot = XamlRoot,
+            };
+            await dialog.ShowAsync();
+        }
+    }
+
+    private void DeleteCookiesButton_Click(object sender, RoutedEventArgs e)
+    {
+        AppSettingsService.Instance.ClearCookiesData();
+        UpdateCookiesState();
     }
 
     private static async Task<StorageFolder?> PickFolderAsync()
