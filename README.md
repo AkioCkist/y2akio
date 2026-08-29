@@ -236,6 +236,13 @@ Helpers/ThumbnailHelper.cs  URL -> BitmapImage for playlist rows
   or `yt-dlp --cookies-from-browser edge` from a logged-in machine) and set it in
   **Settings → Download → Browser cookies**. The app then passes `--cookies` on
   analyze and download.
+- **Facebook: `[facebook] ...: Cannot parse data`** — Facebook's markup changes
+  periodically and breaks older yt-dlp builds; this message is yt-dlp's own "please
+  update" hint. First run `yt-dlp -U` (or replace `bin\yt-dlp.exe` with the latest
+  release). The app also passes `--impersonate chrome` for Facebook URLs to defeat
+  Meta's bot detection. For **private / friends-only** reels, the logged-in cookies
+  must be **fresh** — Facebook sessions expire, so re-export `cookies.txt` from your
+  browser and set it in **Settings → Download → Browser cookies**.
 - **No audio / no merge / leftover `.part`** — ffmpeg not found. Confirm it's in
   `bin` (see above).
 - **No toast on download** — run the app once more after launch; registration

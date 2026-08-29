@@ -110,6 +110,7 @@ public class YtDlpService
             .Append(flat ? "--flat-playlist --playlist-items 1-500 " : "--no-playlist ")
             .Append(FfmpegLocationArg())
             .Append(CookiesArg(cookiesPath))
+            .Append(ImpersonateArg(url))
             .Append($"\"{url}\"");
 
         var (stdout, stderr, exitCode) = await RunProcessAsync(args.ToString(), ct);
@@ -125,6 +126,20 @@ public class YtDlpService
 
     private static string CookiesArg(string? cookiesPath) =>
         string.IsNullOrWhiteSpace(cookiesPath) ? "" : $"--cookies \"{cookiesPath}\" ";
+
+    /// <summary>
+    /// Facebook/Instagram regularly bot-blocks plain requests, which surfaces as
+    /// "[facebook] ...: Cannot parse data". `--impersonate chrome` (curl_cffi TLS fingerprint)
+    /// makes the request look like a real browser — the bundled yt-dlp.exe supports it.
+    /// Scoped to Facebook hosts so other extractors are unaffected.
+    /// </summary>
+    private static string ImpersonateArg(string url) =>
+        IsFacebookUrl(url) ? "--impersonate chrome " : "";
+
+    private static bool IsFacebookUrl(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && (uri.Host.EndsWith("facebook.com", StringComparison.OrdinalIgnoreCase)
+            || uri.Host.EndsWith("fb.watch", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Downloads according to the given request, reporting progress parsed from yt-dlp's stdout.
@@ -145,6 +160,7 @@ public class YtDlpService
         args.Append("--newline "); // one progress line per update, easier to parse
         args.Append(FfmpegLocationArg());
         args.Append(CookiesArg(req.CookiesPath));
+        args.Append(ImpersonateArg(req.Url));
         args.Append($"-o \"{outputTemplate}\" ");
 
         if (req.Kind == MediaKind.Audio)
