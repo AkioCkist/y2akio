@@ -52,6 +52,41 @@
   </ItemGroup>
 
   <!--
+    WindowsAppSDK 2.4 self-contained deployment misses Microsoft.WindowsAppRuntime.Insights.Resource.dll.
+    The runtime's resource loader needs that 34 KB satellite DLL (error-string formatting); without it the
+    app fails at startup with "Unable to load resource dll. Microsoft.WindowsAppRuntime.Insights.Resource.dll"
+    on machines that don't have the Windows App Runtime installed (dev machines mask it because the runtime
+    is installed there). The SDK's payload target only copies component-package runtimes-framework folders,
+    which don't include this file. Extract it from the runtime MSIX and deploy it next to the exe, alongside
+    the rest of the self-contained payload. Remove this target if a future SDK ships the file itself.
+  -->
+  <Target Name="DeployWindowsAppRuntimeInsights"
+          AfterTargets="AddMicrosoftWindowsAppSDKPayloadFilesFromComponents"
+          Condition="'$(WindowsAppSDKSelfContained)' == 'true'">
+    <PropertyGroup>
+      <_WinsAppRuntimeArch>$(Platform)</_WinsAppRuntimeArch>
+      <_WinsAppRuntimeArch Condition="'$(_WinsAppRuntimeArch)' == '' or '$(_WinsAppRuntimeArch)' == 'AnyCPU' or '$(_WinsAppRuntimeArch)' == 'Any CPU'">x64</_WinsAppRuntimeArch>
+      <_WinsAppRuntimeArch Condition="'$(_WinsAppRuntimeArch)' == 'X64'">x64</_WinsAppRuntimeArch>
+      <_WinsAppRuntimeArch Condition="'$(_WinsAppRuntimeArch)' == 'X86'">x86</_WinsAppRuntimeArch>
+      <_WinsAppRuntimeArch Condition="'$(_WinsAppRuntimeArch)' == 'ARM64'">arm64</_WinsAppRuntimeArch>
+    </PropertyGroup>
+    <ItemGroup>
+      <_WindowsAppRuntimeMsix Include="$(NuGetPackageRoot)microsoft.windowsappsdk.runtime\**\tools\MSIX\win10-$(_WinsAppRuntimeArch)\Microsoft.WindowsAppRuntime.2.msix" />
+    </ItemGroup>
+    <PropertyGroup>
+      <_WinsAppRuntimeMsixPath>@(_WindowsAppRuntimeMsix)</_WinsAppRuntimeMsixPath>
+      <_InsightsOut>$(IntermediateOutputPath)Microsoft.WindowsAppRuntime.Insights.Resource.dll</_InsightsOut>
+    </PropertyGroup>
+    <Exec Condition="'$(_WinsAppRuntimeMsixPath)' != '' and !Exists('$(_InsightsOut)')"
+          Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Directory]::CreateDirectory('$(IntermediateOutputPath)') | Out-Null; $z=[System.IO.Compression.ZipFile]::OpenRead('$(_WinsAppRuntimeMsixPath)'); $e=$z.GetEntry('Microsoft.WindowsAppRuntime.Insights.Resource.dll'); if($e){[System.IO.Compression.ZipFileExtensions]::ExtractToFile($e, '$(_InsightsOut)', $true)}; $z.Dispose()&quot;" />
+    <ItemGroup Condition="Exists('$(_InsightsOut)')">
+      <None Include="$(_InsightsOut)"
+            CopyToOutputDirectory="PreserveNewest"
+            Link="Microsoft.WindowsAppRuntime.Insights.Resource.dll" />
+    </ItemGroup>
+  </Target>
+
+  <!--
     Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
     Explorer "Package and Publish" context menu entry to be enabled for this project even if
     the Windows App SDK Nuget package has not yet been restored.

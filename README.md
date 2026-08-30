@@ -300,6 +300,13 @@ Helpers/ThumbnailHelper.cs  URL -> BitmapImage for playlist rows
   `Windows Settings → System → Notifications` to make sure notifications are allowed.
 - **Leftover `.srt` / `.webp`** — when embedding is selected the app auto-deletes
   loose sidecar files created by that run.
+- **`Unable to load resource dll. Microsoft.WindowsAppRuntime.Insights.Resource.dll`** on
+  users' machines — a Windows App SDK 2.x self-contained deploy gap: the 34 KB
+  `Microsoft.WindowsAppRuntime.Insights.Resource.dll` satellite is never copied next to the
+  exe. It works on dev machines only because the Windows App Runtime is installed there; it
+  fails on machines without it. The csproj now extracts that file from the runtime MSIX at
+  build/publish time (`DeployWindowsAppRuntimeInsights` target). If you still hit it, confirm
+  the file exists next to `y2akio.exe` in the publish folder.
 
 ## A note on legality
 
