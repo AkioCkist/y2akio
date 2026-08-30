@@ -22,6 +22,7 @@ public class DownloadRequest
     // Video-specific
     public int? TargetHeight { get; init; }        // null = "Best Quality"
     public string ContainerFormat { get; init; } = "mp4"; // mp4 / mkv / webm
+    public string VideoCodec { get; init; } = "auto";    // "auto" / "h264" / "hevc" / "av1" / "vp9" / "mpeg4" — non-auto forces a transcode
 
     // Audio-specific
     public int? AudioBitrateKbps { get; init; }     // 320/256/192/128, null = best
@@ -211,7 +212,20 @@ public class YtDlpService
         {
             var heightFilter = req.TargetHeight is int h ? $"[height<={h}]" : "";
             args.Append($"-f \"bestvideo{heightFilter}+bestaudio/best{heightFilter}\" ");
-            args.Append($"--merge-output-format {req.ContainerFormat} ");
+
+            if (req.VideoCodec != "auto")
+            {
+                // Force transcode: merge to mkv first (--recode-video mp4 SKIPS if the merged container
+                // is already mp4), then convert to the chosen codec. Saved file is always the chosen
+                // codec in MP4, whatever the source was (AV1/VP9/H.264). Requires ffmpeg.
+                args.Append("--merge-output-format mkv ");
+                args.Append("--recode-video mp4 ");
+                args.Append($"--postprocessor-args \"recode:{CodecTranscodeArgs(req.VideoCodec)} -c:a aac -c:s mov_text\" ");
+            }
+            else
+            {
+                args.Append($"--merge-output-format {req.ContainerFormat} ");
+            }
         }
 
         if (req.EmbedMetadata)
@@ -276,6 +290,22 @@ public class YtDlpService
         progress.Report(new DownloadProgress { Percent = 100, StatusText = "Done" });
         return resolvedPath ?? Path.Combine(req.SaveFolder, "(saved)");
     }
+
+    /// <summary>
+    /// ffmpeg encoder + quality flags for a forced codec transcode. AV1 uses SVT-AV1
+    /// (<c>libsvtav1</c>) rather than the reference libaom encoder — libaom is several times slower
+    /// for the same quality, far too slow for an interactive download. VP9 needs <c>-b:v 0</c> so
+    /// the CRF actually governs bitrate. MPEG-4 uses the part-2 quality scale (<c>-q:v</c>, lower = better).
+    /// </summary>
+    private static string CodecTranscodeArgs(string codec) => codec switch
+    {
+        "h264"  => "-c:v libx264 -preset medium -crf 18",
+        "hevc"  => "-c:v libx265 -preset medium -crf 23",
+        "av1"   => "-c:v libsvtav1 -preset 6 -crf 30",
+        "vp9"   => "-c:v libvpx-vp9 -crf 31 -b:v 0 -row-mt 1",
+        "mpeg4" => "-c:v mpeg4 -q:v 3",
+        _       => "",
+    };
 
     /// <summary>
     /// Deletes loose sidecar files this run created, when the user asked for them to be embedded:

@@ -17,6 +17,12 @@ download. Fluent/WinUI 3 UI, .NET 8, Windows App SDK.
   embed into the file or save separately.
 - **Container / quality** — MP4/MKV/WEBM, height-based quality from the video's
   actual formats, audio bitrate (320/256/192/128).
+- **Video codec (transcode)** — force the output codec: **H.264 (AVC)**, **HEVC (H.265)**,
+  **AV1**, **VP9**, or **MPEG-4 (Part 2)**. Whatever yt-dlp picks (2K/4K YouTube streams are
+  usually AV1/VP9), the saved file is re-encoded to the chosen codec in MP4 via ffmpeg.
+  Slow for high resolutions — it's a full encode, and quality is capped by CRF (H.264
+  `crf 18`, HEVC `crf 23`, AV1 `crf 30`, VP9 `crf 31`, MPEG-4 `-q:v 3`). AV1 uses the
+  fast SVT-AV1 encoder.
 - **Thumbnails** — embed into the file, save alongside, or skip.
 - **Metadata** — embed title/artist metadata (`--add-metadata`).
 - **Filename options** — prefix with date+time and/or channel, include title.

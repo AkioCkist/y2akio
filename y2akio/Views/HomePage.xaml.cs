@@ -128,6 +128,18 @@ public sealed partial class HomePage : Page
         VideoFormatLabel.Text      = L("Home.VideoFormat");
         AudioFormatLabel.Text      = L("Home.AudioFormat");
 
+        // Rebuild codec combo (localized item texts)
+        var codecIdx = VideoCodecComboBox.SelectedIndex;
+        VideoCodecComboBox.Items.Clear();
+        VideoCodecComboBox.Items.Add(new ComboBoxItem { Tag = "auto", Content = L("Home.CodecAuto") });
+        VideoCodecComboBox.Items.Add(new ComboBoxItem { Tag = "h264", Content = L("Home.CodecH264") });
+        VideoCodecComboBox.Items.Add(new ComboBoxItem { Tag = "hevc", Content = L("Home.CodecHevc") });
+        VideoCodecComboBox.Items.Add(new ComboBoxItem { Tag = "av1", Content = L("Home.CodecAv1") });
+        VideoCodecComboBox.Items.Add(new ComboBoxItem { Tag = "vp9", Content = L("Home.CodecVp9") });
+        VideoCodecComboBox.Items.Add(new ComboBoxItem { Tag = "mpeg4", Content = L("Home.CodecMpeg4") });
+        VideoCodecComboBox.SelectedIndex = codecIdx >= 0 ? codecIdx : 0;
+        VideoCodecLabel.Text = L("Home.VideoCodec");
+
         // File name prefix
         FileNamePrefixLabel.Text   = L("Home.FileNamePrefix");
         PrefixDateTimeCheck.Content = L("Home.PrefixDateTime");
@@ -468,6 +480,7 @@ public sealed partial class HomePage : Page
         VideoFormatToggle.IsChecked = isVideo;
         AudioFormatToggle.IsChecked = !isVideo;
         ContainerFormatPanel.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
+        CodecPanel.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
         AudioFormatPanel.Visibility = isVideo ? Visibility.Collapsed : Visibility.Visible;
         SubtitleSection.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
 
@@ -480,6 +493,14 @@ public sealed partial class HomePage : Page
 
     private void AudioFormatComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         => RefreshQualityOptions();
+
+    private void VideoCodecComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // Fires during InitializeComponent before ContainerComboBox is wired — guard.
+        if (ContainerComboBox is null) return;
+        var codec = (VideoCodecComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "auto";
+        ContainerComboBox.IsEnabled = codec == "auto";
+    }
 
     /// <summary>Rebuilds the Quality/Format dropdown based on the selected media type and the analyzed formats.</summary>
     private void RefreshQualityOptions()
@@ -566,6 +587,12 @@ public sealed partial class HomePage : Page
         // Use the correct save folder for the chosen media type
         var saveFolder = isVideo ? VideoSaveLocationTextBox.Text : AudioSaveLocationTextBox.Text;
 
+        // Non-auto codec forces a transcode → the target container must be MP4 (all codecs here mux into MP4).
+        var videoCodec = (VideoCodecComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "auto";
+        var container = videoCodec == "auto"
+            ? (ContainerComboBox.SelectedItem as string ?? "MP4").ToLowerInvariant()
+            : "mp4";
+
         return new DownloadRequest
         {
             Url = url,
@@ -573,7 +600,8 @@ public sealed partial class HomePage : Page
             SaveFolder = saveFolder,
             CookiesPath = cookiesPath,
             TargetHeight = targetHeight,
-            ContainerFormat = (ContainerComboBox.SelectedItem as string ?? "MP4").ToLowerInvariant(),
+            VideoCodec = videoCodec,
+            ContainerFormat = container,
             AudioBitrateKbps = audioKbps,
             AudioFormat = (AudioFormatComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "mp3",
             PrefixDateTime = PrefixDateTimeCheck.IsChecked == true,

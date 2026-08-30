@@ -127,6 +127,19 @@
                         </ComboBox>
                     </StackPanel>
 
+                    <StackPanel x:Name="CodecPanel" Spacing="6">
+                        <TextBlock x:Name="VideoCodecLabel" Text="Video Codec" Opacity="0.7" FontSize="12" />
+                        <ComboBox x:Name="VideoCodecComboBox" HorizontalAlignment="Stretch" SelectedIndex="0"
+                                  SelectionChanged="VideoCodecComboBox_SelectionChanged">
+                            <ComboBoxItem Content="Auto" Tag="auto" />
+                            <ComboBoxItem Content="H.264 (AVC)" Tag="h264" />
+                            <ComboBoxItem Content="HEVC (H.265)" Tag="hevc" />
+                            <ComboBoxItem Content="AV1" Tag="av1" />
+                            <ComboBoxItem Content="VP9" Tag="vp9" />
+                            <ComboBoxItem Content="MPEG-4 (Part 2)" Tag="mpeg4" />
+                        </ComboBox>
+                    </StackPanel>
+
                     <StackPanel x:Name="AudioFormatPanel" Spacing="6" Visibility="Collapsed">
                         <TextBlock x:Name="AudioFormatLabel" Text="Audio Format" Opacity="0.7" FontSize="12" />
                         <ComboBox x:Name="AudioFormatComboBox" HorizontalAlignment="Stretch" SelectedIndex="0"
