@@ -279,6 +279,11 @@ Helpers/ThumbnailHelper.cs  URL -> BitmapImage for playlist rows
 
 - **"Couldn't analyze that link"** — yt-dlp error shown in the red InfoBar; full
   stderr also lands in the log panel. Check you're online and the URL is valid.
+- **YouTube: `[youtube] <id>: This video is not available` (but the video plays in a browser)** —
+  YouTube's web client is bot-blocked for that specific video. The app now auto-retries such videos
+  via the Android player client (`player_client=android`) on both analyze and download. Trade-off:
+  some videos only offer **360p** through that client; normal videos still use the web client at full
+  quality.
 - **X/Twitter: `No video could be found in this tweet`** — the tweet's video is
   login-gated; anonymous yt-dlp can't see it. Export your X session cookies to a
   Netscape-format `cookies.txt` (browser extension such as "Get cookies.txt LOCALLY",

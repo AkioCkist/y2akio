@@ -108,23 +108,34 @@ public class YtDlpService
     {
         url = NormalizeUrl(url);
 
-        var args = new StringBuilder()
-            .Append("--dump-single-json --no-warnings ")
-            .Append(flat ? "--flat-playlist --playlist-items 1-500 " : "--no-playlist ")
-            .Append(FfmpegLocationArg())
-            .Append(CookiesArg(cookiesPath, url))
-            .Append(ImpersonateArg(url))
-            .Append($"\"{url}\"");
+        // YouTube's web client is increasingly bot-blocked for specific videos ("This video is not
+        // available" / "The page needs to be reloaded"). When that happens, retry once via the
+        // Android player client, which is far less aggressive about bot checks (trade-off: a lower
+        // format ceiling — some videos only surface 360p through it).
+        var clientOverrides = IsYouTubeUrl(url)
+            ? new[] { "", "--extractor-args \"youtube:player_client=android\" " }
+            : new[] { "" };
 
-        var (stdout, stderr, exitCode) = await RunProcessAsync(args.ToString(), ct);
-
-        if (exitCode != 0 || string.IsNullOrWhiteSpace(stdout))
+        string lastError = "";
+        foreach (var clientOverride in clientOverrides)
         {
-            throw new InvalidOperationException(
-                string.IsNullOrWhiteSpace(stderr) ? "yt-dlp failed to analyze this link." : stderr.Trim());
+            var args = new StringBuilder()
+                .Append("--dump-single-json --no-warnings ")
+                .Append(flat ? "--flat-playlist --playlist-items 1-500 " : "--no-playlist ")
+                .Append(FfmpegLocationArg())
+                .Append(CookiesArg(cookiesPath, url))
+                .Append(ImpersonateArg(url))
+                .Append(clientOverride)
+                .Append($"\"{url}\"");
+
+            var (stdout, stderr, exitCode) = await RunProcessAsync(args.ToString(), ct);
+            lastError = stderr;
+            if (exitCode == 0 && !string.IsNullOrWhiteSpace(stdout)) return stdout;
+            if (!IsYoutubeClientRetryable(lastError)) break;
         }
 
-        return stdout;
+        throw new InvalidOperationException(
+            string.IsNullOrWhiteSpace(lastError) ? "yt-dlp failed to analyze this link." : lastError.Trim());
     }
 
     /// <summary>
@@ -194,11 +205,70 @@ public class YtDlpService
 
         var url = NormalizeUrl(req.Url);
         var outputTemplate = BuildOutputTemplate(req);
+
+        string? resolvedPath = null;
+        var destinationRegex = new Regex(@"Destination:\s*(.+)$", RegexOptions.Compiled);
+        var mergeRegex = new Regex(@"Merging formats into\s*""(.+)""", RegexOptions.Compiled);
+        var progressRegex = new Regex(@"\[download\]\s+([\d.]+)%", RegexOptions.Compiled);
+
+        // Files present before this download, so cleanup only touches what this run created.
+        var priorFiles = SnapshotFileNames(req.SaveFolder);
+
+        void OnLine(string line)
+        {
+            onLogLine?.Invoke(line);
+
+            var pMatch = progressRegex.Match(line);
+            if (pMatch.Success && double.TryParse(pMatch.Groups[1].Value, out var pct))
+            {
+                progress.Report(new DownloadProgress { Percent = pct, StatusText = line.Trim() });
+                return;
+            }
+
+            var dMatch = destinationRegex.Match(line);
+            if (dMatch.Success) resolvedPath = dMatch.Groups[1].Value.Trim();
+
+            var mMatch = mergeRegex.Match(line);
+            if (mMatch.Success) resolvedPath = mMatch.Groups[1].Value.Trim();
+        }
+
+        // YouTube web-client bot-check fallback — same rationale as AnalyzeAsync. Only the Android
+        // attempt is rerun; the first failure's log lines are already visible in the log panel.
+        var clientOverrides = IsYouTubeUrl(url)
+            ? new[] { "", "--extractor-args \"youtube:player_client=android\" " }
+            : new[] { "" };
+
+        string lastError = "";
+        var lastExitCode = 1;
+        foreach (var clientOverride in clientOverrides)
+        {
+            var args = BuildDownloadArgs(req, url, outputTemplate, clientOverride);
+            var (_, stderr, exitCode) = await RunProcessAsync(args.ToString(), ct, OnLine);
+            lastError = stderr;
+            lastExitCode = exitCode;
+            if (exitCode == 0) break;
+            if (!IsYoutubeClientRetryable(lastError)) break;
+        }
+
+        if (lastExitCode != 0)
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(lastError) ? "Download failed." : lastError.Trim());
+
+        CleanupLeftoverFiles(req, priorFiles);
+
+        progress.Report(new DownloadProgress { Percent = 100, StatusText = "Done" });
+        return resolvedPath ?? Path.Combine(req.SaveFolder, "(saved)");
+    }
+
+    /// <summary>Builds the full yt-dlp command line for a download request.</summary>
+    /// <param name="clientOverride">Extra extractor-args (e.g. the YouTube Android client fallback), or "".</param>
+    private string BuildDownloadArgs(DownloadRequest req, string url, string outputTemplate, string clientOverride)
+    {
         var args = new StringBuilder();
         args.Append("--newline "); // one progress line per update, easier to parse
         args.Append(FfmpegLocationArg());
         args.Append(CookiesArg(req.CookiesPath, url));
         args.Append(ImpersonateArg(req.Url));
+        args.Append(clientOverride);
         args.Append($"-o \"{outputTemplate}\" ");
 
         if (req.Kind == MediaKind.Audio)
@@ -253,42 +323,21 @@ public class YtDlpService
         }
 
         args.Append($"\"{url}\"");
+        return args.ToString();
+    }
 
-        string? resolvedPath = null;
-        var destinationRegex = new Regex(@"Destination:\s*(.+)$", RegexOptions.Compiled);
-        var mergeRegex = new Regex(@"Merging formats into\s*""(.+)""", RegexOptions.Compiled);
-        var progressRegex = new Regex(@"\[download\]\s+([\d.]+)%", RegexOptions.Compiled);
-
-        // Files present before this download, so cleanup only touches what this run created.
-        var priorFiles = SnapshotFileNames(req.SaveFolder);
-
-        void OnLine(string line)
-        {
-            onLogLine?.Invoke(line);
-
-            var pMatch = progressRegex.Match(line);
-            if (pMatch.Success && double.TryParse(pMatch.Groups[1].Value, out var pct))
-            {
-                progress.Report(new DownloadProgress { Percent = pct, StatusText = line.Trim() });
-                return;
-            }
-
-            var dMatch = destinationRegex.Match(line);
-            if (dMatch.Success) resolvedPath = dMatch.Groups[1].Value.Trim();
-
-            var mMatch = mergeRegex.Match(line);
-            if (mMatch.Success) resolvedPath = mMatch.Groups[1].Value.Trim();
-        }
-
-        var (_, stderr, exitCode) = await RunProcessAsync(args.ToString(), ct, OnLine);
-
-        if (exitCode != 0)
-            throw new InvalidOperationException(string.IsNullOrWhiteSpace(stderr) ? "Download failed." : stderr.Trim());
-
-        CleanupLeftoverFiles(req, priorFiles);
-
-        progress.Report(new DownloadProgress { Percent = 100, StatusText = "Done" });
-        return resolvedPath ?? Path.Combine(req.SaveFolder, "(saved)");
+    /// <summary>
+    /// True when a YouTube failure looks like the web-client bot-check (worth retrying via the
+    /// Android client) rather than a definitive problem (private/region-locked video, bad ID, ...).
+    /// </summary>
+    private static bool IsYoutubeClientRetryable(string? error)
+    {
+        if (string.IsNullOrWhiteSpace(error)) return false;
+        return error.Contains("This video is not available", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("Video unavailable", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("needs to be reloaded", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("Requested format is not available", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("Sign in to confirm", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
