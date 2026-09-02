@@ -106,9 +106,3 @@ bin/
         └── ffplay.exe
 ```
 
-## Repository
-
-- Solution: `y2akio.sln`
-- Application project: `y2akio/y2akio.csproj`
-- Detailed documentation: `docs/`
-bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\
