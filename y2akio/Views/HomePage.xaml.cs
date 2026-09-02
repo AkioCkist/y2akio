@@ -31,6 +31,10 @@ public sealed partial class HomePage : Page
     private CancellationTokenSource? _downloadCts;
     private ObservableCollection<SubtitleSelection>? _autoSubtitleLangs;
 
+    private bool _analyzeInProgress;   // guards Enter+click / double-click races while an analyze runs
+    private bool _previewActive;       // instant card is shown but the full dump hasn't populated options yet
+    private int _activeDownloads;      // so an analyze finish never re-enables DownloadNow mid-download
+
     /// <summary>
     /// Looks for yt-dlp.exe next to the running app first (so it works after you publish/copy
     /// the app elsewhere), then falls back to the known dev-machine bin folder, then finally
@@ -219,9 +223,10 @@ public sealed partial class HomePage : Page
     private async Task AnalyzeAsync()
     {
         var url = UrlTextBox.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(url))
+        if (string.IsNullOrWhiteSpace(url) || _analyzeInProgress)
             return;
 
+        _analyzeInProgress = true;
         ErrorBar.IsOpen = false;
         OptionsPanel.Visibility = Visibility.Collapsed;
         PlaylistPanel.Visibility = Visibility.Collapsed;
@@ -232,23 +237,37 @@ public sealed partial class HomePage : Page
         try
         {
             cookiesPath = await AppSettingsService.Instance.GetCookiesFilePathAsync();
-            var result = await _ytDlp.AnalyzeAsync(url, cookiesPath);
 
-            if (result.IsPlaylist && result.Playlist is { } playlist)
+            if (YtDlpService.LooksLikeSingleVideoUrl(url))
             {
-                _currentPlaylist = playlist;
-                PopulatePlaylistPanel(playlist);
-                PlaylistPanel.Visibility = Visibility.Visible;
+                // Fast single-video path: ONE full dump (~4s). Paint the card from oEmbed (~0.2s) while it runs.
+                _currentVideo = null;
+                _previewActive = true;
+                var dumpTask = _ytDlp.AnalyzeVideoAsync(url, cookiesPath);
+                _ = TryPaintYouTubePreviewAsync(url);
+                var video = await dumpTask;
+                FinishVideoOptions(video);
             }
-            else if (result.Video is { } video)
+            else
             {
-                _currentVideo = video;
-                PopulateOptionsPanel(video);
-                OptionsPanel.Visibility = Visibility.Visible;
+                // Ambiguous / playlist URL: probe first to detect a playlist, then populate.
+                var result = await _ytDlp.AnalyzeAsync(url, cookiesPath);
+
+                if (result.IsPlaylist && result.Playlist is { } playlist)
+                {
+                    _currentPlaylist = playlist;
+                    PopulatePlaylistPanel(playlist);
+                    PlaylistPanel.Visibility = Visibility.Visible;
+                }
+                else if (result.Video is { } video)
+                {
+                    FinishVideoOptions(video);
+                }
             }
         }
         catch (Exception ex)
         {
+            HidePreviewOnError();
             ErrorBar.Message = ex.Message;
             ErrorBar.IsOpen = true;
         }
@@ -257,6 +276,7 @@ public sealed partial class HomePage : Page
             if (!string.IsNullOrEmpty(cookiesPath)) AppSettingsService.Instance.CleanupCookiesFile();
             AnalyzingRing.IsActive = false;
             AnalyzeButton.IsEnabled = true;
+            _analyzeInProgress = false;
         }
     }
 
@@ -287,22 +307,27 @@ public sealed partial class HomePage : Page
     {
         if (e.ClickedItem is not PlaylistEntry entry || string.IsNullOrWhiteSpace(entry.Url))
             return;
+        if (_analyzeInProgress) return;
+        _analyzeInProgress = true;
 
         ErrorBar.IsOpen = false;
         AnalyzingRing.IsActive = true;
         DownloadPlaylistButton.IsEnabled = false;
+
+        // Paint the options card instantly from the track's own metadata (title/thumb/duration are already
+        // in hand at zero cost), then one full dump fills quality/res/subtitle options.
+        ShowInstantCard(entry.Title, "", entry.DurationDisplay, ResolveEntryThumbnail(entry));
 
         string cookiesPath = "";
         try
         {
             cookiesPath = await AppSettingsService.Instance.GetCookiesFilePathAsync();
             var video = await _ytDlp.AnalyzeVideoAsync(entry.Url, cookiesPath);
-            _currentVideo = video;
-            PopulateOptionsPanel(video);
-            OptionsPanel.Visibility = Visibility.Visible;
+            FinishVideoOptions(video);
         }
         catch (Exception ex)
         {
+            HidePreviewOnError();
             ErrorBar.Message = ex.Message;
             ErrorBar.IsOpen = true;
         }
@@ -311,6 +336,7 @@ public sealed partial class HomePage : Page
             if (!string.IsNullOrEmpty(cookiesPath)) AppSettingsService.Instance.CleanupCookiesFile();
             AnalyzingRing.IsActive = false;
             DownloadPlaylistButton.IsEnabled = true;
+            _analyzeInProgress = false;
         }
     }
 
@@ -324,6 +350,7 @@ public sealed partial class HomePage : Page
         var isVideo = VideoFormatToggle.IsChecked == true;
         var qualitySelection = QualityComboBox.SelectedItem as string ?? "";
 
+        _activeDownloads++;
         DownloadPlaylistButton.IsEnabled = false;
         DownloadProgressBar.Visibility = Visibility.Visible;
         DownloadStatusText.Visibility = Visibility.Visible;
@@ -376,6 +403,7 @@ public sealed partial class HomePage : Page
         finally
         {
             if (!string.IsNullOrEmpty(cookiesPath)) AppSettingsService.Instance.CleanupCookiesFile();
+            _activeDownloads--;
             DownloadPlaylistButton.IsEnabled = true;
         }
     }
@@ -412,6 +440,82 @@ public sealed partial class HomePage : Page
     }
 
     // ─── Options panel ────────────────────────────────────────────────────────
+
+    /// <summary>Resets every options control so a fresh analyze never shows stale state from the previous video.</summary>
+    private void ClearOptionsState()
+    {
+        _currentVideo = null;
+        QualityComboBox.Items.Clear();
+        SubtitleLanguageComboBox.Items.Clear();
+        _autoSubtitleLangs = null;
+        AutoLanguageList.ItemsSource = null;
+        DownloadNowButton.IsEnabled = false;
+    }
+
+    /// <summary>
+    /// Shows the options panel immediately with whatever title/thumb is already in hand (oEmbed for a typed
+    /// URL, playlist-entry data for a track click). Quality/subtitle controls stay empty and Download is
+    /// disabled until the full dump lands and <see cref="FinishVideoOptions"/> fills them.
+    /// </summary>
+    private void ShowInstantCard(string title, string uploader, string durationDisplay, string? thumbUrl)
+    {
+        ClearOptionsState();
+        _previewActive = true;
+
+        VideoTitleText.Text = title;
+        UploaderText.Text = uploader;
+        DurationText.Text = durationDisplay;
+        if (!string.IsNullOrWhiteSpace(thumbUrl) && Uri.TryCreate(thumbUrl, UriKind.Absolute, out var thumbUri))
+            ThumbnailImage.Source = new BitmapImage(thumbUri);
+
+        OptionsPanel.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Full dump arrived: swap the instant card for the complete, populated options panel.</summary>
+    private void FinishVideoOptions(VideoInfo video)
+    {
+        _currentVideo = video;
+        PopulateOptionsPanel(video); // overwrites the card + fills subtitle languages + quality list
+        _previewActive = false;
+        OptionsPanel.Visibility = Visibility.Visible;
+        DownloadNowButton.IsEnabled = _activeDownloads == 0;
+    }
+
+    /// <summary>An analyze failed while only the instant card was showing — hide it rather than leave a half-loaded panel.</summary>
+    private void HidePreviewOnError()
+    {
+        if (!_previewActive) return;
+        OptionsPanel.Visibility = Visibility.Collapsed;
+        _previewActive = false;
+        DownloadNowButton.IsEnabled = _activeDownloads == 0;
+    }
+
+    /// <summary>
+    /// Fire-and-forget: paint the card from YouTube oEmbed (~0.2s) while the full dump is still running.
+    /// No-ops if the preview already ended (dump beat it) or oEmbed returned nothing. Continuation must
+    /// resume on the UI thread, so no ConfigureAwait(false) here.
+    /// </summary>
+    private async Task TryPaintYouTubePreviewAsync(string url)
+    {
+        try
+        {
+            var preview = await _ytDlp.FetchYouTubePreviewAsync(url);
+            if (preview is not null && _previewActive)
+                ShowInstantCard(preview.Title, preview.Author, "", preview.ThumbnailUrl);
+        }
+        catch
+        {
+            // best effort — the full dump paints the card anyway
+        }
+    }
+
+    /// <summary>Playlist flat entries often omit the thumbnail; derive the standard YouTube one from the id.</summary>
+    private static string? ResolveEntryThumbnail(PlaylistEntry entry)
+    {
+        if (!string.IsNullOrWhiteSpace(entry.ThumbnailUrl)) return entry.ThumbnailUrl;
+        if (!string.IsNullOrWhiteSpace(entry.Id)) return $"https://i.ytimg.com/vi/{entry.Id}/hqdefault.jpg";
+        return null;
+    }
 
     private void PopulateOptionsPanel(VideoInfo video)
     {
@@ -666,6 +770,7 @@ public sealed partial class HomePage : Page
         string cookiesPath = await AppSettingsService.Instance.GetCookiesFilePathAsync();
         var request = BuildDownloadRequest(_currentVideo.OriginalUrl, isVideo, qualitySelection, cookiesPath);
 
+        _activeDownloads++;
         DownloadNowButton.IsEnabled = false;
         DownloadProgressBar.Visibility = Visibility.Visible;
         DownloadStatusText.Visibility = Visibility.Visible;
@@ -707,7 +812,8 @@ public sealed partial class HomePage : Page
         finally
         {
             if (!string.IsNullOrEmpty(cookiesPath)) AppSettingsService.Instance.CleanupCookiesFile();
-            DownloadNowButton.IsEnabled = true;
+            _activeDownloads--;
+            DownloadNowButton.IsEnabled = _activeDownloads == 0;
         }
     }
 

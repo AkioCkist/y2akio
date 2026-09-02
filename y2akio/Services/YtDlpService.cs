@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -56,12 +57,18 @@ public class DownloadProgress
     public string StatusText { get; init; } = "";
 }
 
+/// <summary>Instant title/author/thumbnail from YouTube's oEmbed endpoint (used to paint the options card while the full dump runs).</summary>
+public record YouTubePreview(string Title, string Author, string ThumbnailUrl);
+
 public class YtDlpService
 {
     // Adjust these if yt-dlp.exe / ffmpeg.exe aren't on PATH. Ship them next to the app
     // (e.g. in a "bin" subfolder) and point these at that folder for a self-contained install.
     private readonly string _ytDlpPath;
     private readonly string _ffmpegDirectory;
+
+    // Shared client for the cheap oEmbed metadata call (never spawns yt-dlp).
+    private static readonly HttpClient _http = new();
 
     public YtDlpService(string ytDlpPath = "yt-dlp.exe", string ffmpegDirectory = "")
     {
@@ -78,6 +85,12 @@ public class YtDlpService
     /// <param name="cookiesPath">Netscape cookies.txt path for login-gated sites (X/Twitter, ...). Null/empty = no cookies.</param>
     public async Task<AnalyzeResult> AnalyzeAsync(string url, string? cookiesPath = null, CancellationToken ct = default)
     {
+        // Fast path: a URL that is definitely one video needs no playlist probe — a flat probe on a
+        // single video costs a full extraction (~3s) AND still returns the full formats array, so it
+        // would only be wasted work before the real dump below. Go straight to the single dump.
+        if (LooksLikeSingleVideoUrl(url))
+            return new AnalyzeResult { IsPlaylist = false, Video = await AnalyzeVideoAsync(url, cookiesPath, ct) };
+
         var flatJson = await RunDumpJsonAsync(url, flat: true, cookiesPath, ct);
 
         using (var doc = JsonDocument.Parse(flatJson))
@@ -102,6 +115,36 @@ public class YtDlpService
     {
         var json = await RunDumpJsonAsync(url, flat: false, cookiesPath, ct);
         return VideoInfo.FromJson(json, url);
+    }
+
+    /// <summary>
+    /// Cheap YouTube-only title/author/thumbnail via the oEmbed endpoint (~0.2s, no yt-dlp process).
+    /// Used to paint the options card while the full dump is still running. Never throws — returns null
+    /// for non-YouTube URLs, HTTP errors, and unparseable/blocked responses (age-restricted, private...).
+    /// </summary>
+    public async Task<YouTubePreview?> FetchYouTubePreviewAsync(string url, CancellationToken ct = default)
+    {
+        try
+        {
+            if (!IsYouTubeUrl(url)) return null;
+
+            var endpoint = $"https://www.youtube.com/oembed?url={Uri.EscapeDataString(url)}&format=json";
+            using var response = await _http.GetAsync(endpoint, ct);
+            if (!response.IsSuccessStatusCode) return null;
+
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            var root = doc.RootElement;
+            string GetStr(string name) =>
+                root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+
+            var title = GetStr("title");
+            if (string.IsNullOrWhiteSpace(title)) return null;
+            return new YouTubePreview(title, GetStr("author_name"), GetStr("thumbnail_url"));
+        }
+        catch
+        {
+            return null; // oEmbed is a best-effort nicety; the full dump paints the card anyway
+        }
     }
 
     private async Task<string> RunDumpJsonAsync(string url, bool flat, string? cookiesPath, CancellationToken ct)
@@ -156,6 +199,51 @@ public class YtDlpService
         && (uri.Host.EndsWith("youtube.com", StringComparison.OrdinalIgnoreCase)
             || uri.Host.EndsWith("youtube-nocookie.com", StringComparison.OrdinalIgnoreCase)
             || string.Equals(uri.Host, "youtu.be", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// True only when the URL *definitely* points at ONE video (so the playlist probe can be skipped —
+    /// it costs a full extraction on a single video and still returns full formats). Conservative by
+    /// design: anything ambiguous (channels, /playlist, list= params, non-YouTube hosts) returns false
+    /// and keeps the flat-probe → playlist-detection path.
+    /// </summary>
+    public static bool LooksLikeSingleVideoUrl(string url)
+    {
+        url = NormalizeUrl(url); // same normalization RunDumpJsonAsync applies
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || !IsYouTubeUrl(url)) return false;
+
+        var query = uri.Query.TrimStart('?');
+        foreach (var pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var key = pair.Split('=', 2)[0];
+            if (string.Equals(key, "list", StringComparison.OrdinalIgnoreCase)) return false; // in a playlist / watch-later
+        }
+
+        var host = uri.Host;
+        var isShortHost = string.Equals(host, "youtu.be", StringComparison.OrdinalIgnoreCase);
+        var segs = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        if (isShortHost) return segs.Length == 1 && !string.IsNullOrWhiteSpace(segs[0]);
+
+        if (segs.Length == 1 && string.Equals(segs[0], "watch", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = pair.Split('=', 2);
+                if (parts.Length == 2
+                    && string.Equals(parts[0], "v", StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrWhiteSpace(parts[1]))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // /shorts/<id>, /embed/<id>, /live/<id>, /v/<id>
+        return segs.Length == 2
+            && segs[0] is "shorts" or "embed" or "live" or "v"
+            && !string.IsNullOrWhiteSpace(segs[1]);
+    }
 
     /// <summary>
     /// Facebook/Instagram regularly bot-blocks plain requests, which surfaces as
