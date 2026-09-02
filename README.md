@@ -1,7 +1,29 @@
 # Y2Akio — Media Downloader (WinUI 3)
 
-Y2Mate-style downloader built on `yt-dlp`. Paste a link → Analyze → pick options →
-download. Fluent/WinUI 3 UI, .NET 8, Windows App SDK.
+Y2Akio is a WinUI 3 media downloader for Windows, built with .NET 8, Windows App SDK,
+`yt-dlp`, and `ffmpeg`. Paste a supported media URL, analyze it, choose video or audio
+options, and download it with live progress and history.
+
+## Overview
+
+- Supports individual videos and playlists.
+- Downloads video or audio with configurable quality, containers, codecs, subtitles,
+  thumbnails, metadata, and filename options.
+- Provides live logs, Windows completion notifications, and persistent download history.
+- Supports encrypted browser-cookie storage for login-gated media.
+
+## Documentation
+
+Use the table of contents below to open the detailed documentation:
+
+1. [Features](docs/features.md)
+2. [Requirements and setup](docs/requirements-and-setup.md)
+3. [How to use](docs/usage.md)
+4. [Build and publish](docs/build-and-publish.md)
+5. [Security: cookie storage and encryption](docs/security-cookies.md)
+6. [Troubleshooting](docs/troubleshooting.md)
+7. [Project layout](docs/project-layout.md)
+8. [Analyze optimization notes](docs/analyze-optimization.md)
 
 ## Features
 
@@ -80,241 +102,9 @@ bin/
         └── ffplay.exe
 ```
 
-Verify:
+## Repository
 
-```powershell
-.\bin\yt-dlp.exe --version
-.\bin\ffmpeg-9.0.1-full_build\bin\ffmpeg.exe -version
-```
-
-## Build & run
-
-```powershell
-dotnet build -c Debug -p:Platform=x64
-# or from Visual Studio: open the .sln/.csproj, F5
-```
-
-The app is **unpackaged** — no MSIX install needed, it runs straight from the build
-output. First launch registers a toast AUMID + Start-menu shortcut so download
-notifications work.
-
-## Build a standalone .exe (publish)
-
-Produces a self-contained Windows 11/10 x64 build (no .NET needed on the target
-machine):
-
-```powershell
-dotnet publish -c Release -p:Platform=x64 -p:PublishTrimmed=false
-```
-
-> `PublishTrimmed=false` is required — WinUI 3 apps break when trimming is enabled.
-
-Output goes to:
-
-```
+- Solution: `y2akio.sln`
+- Application project: `y2akio/y2akio.csproj`
+- Detailed documentation: `docs/`
 bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\
-├── y2akio.exe                  # the app
-├── ...                         # WinUI/WinAppSDK runtime DLLs
-└── bin\                        # copy yt-dlp + ffmpeg here (see below)
-```
-
-WinUI 3 unpackaged apps **cannot be a single .exe file** — the runtime DLLs in the
-publish folder are required. Ship/zip the whole `publish` folder together.
-
-The app looks for yt-dlp/ffmpeg in `publish\bin\` next to the exe, so copy them
-over (or point `ResolveYtDlpPath`/`ResolveFfmpegDirectory` at your own paths):
-
-```powershell
-cd bin\Release\net8.0-windows10.0.19041.0\win-x64\publish
-mkdir bin
-# 1. yt-dlp: single exe — grab from https://github.com/yt-dlp/yt-dlp/releases
-copy ..\..\..\..\..\bin\yt-dlp.exe .\bin\        # or wherever you keep it
-# 2. ffmpeg full build — extract so bin\ffmpeg-<ver>-full_build\bin\ffmpeg.exe exists
-xcopy ..\..\..\..\..\bin\ffmpeg-9.0.1-full_build .\bin\ /E
-```
-
-Then double-click `y2akio.exe`. First run registers the toast AUMID + Start-menu
-shortcut; repeat the toast step on the new machine if notifications don't show.
-
-## Standard build (dev)
-
-```powershell
-# Debug build (fastest iteration)
-dotnet build -c Debug -p:Platform=x64
-
-# Run the built exe
-.\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\y2akio.exe
-```
-
-Or open the `.sln`/`.csproj` in Visual Studio and press **F5**. Visual Studio
-launches the unpackaged app directly — no MSIX install step.
-
-## Debugging after build
-
-If the app builds but crashes / won't open, walk through in order:
-
-**1. Run from a terminal and check the exit code.**
-GUI apps produce no console output, but a crash still returns a code:
-
-```powershell
-# PowerShell
-.\y2akio.exe; echo "exit=$LASTEXITCODE"
-```
-
-- `exit=127` in Git Bash → loader failed (missing DLL next to the exe).
-- Process starts then disappears within seconds → runtime exception, go to step 2.
-
-**2. Read the Windows Application event log.** The actual fault details land here:
-
-```powershell
-Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000,1026} -MaxEvents 20 |
-  Format-List TimeCreated, ProviderName, Message
-```
-
-- **Id 1000** (Application Error) → shows the faulting module + exception code.
-- **Id 1026** (.NET Runtime) → the full managed stack trace.
-- `0xc000027b` (STATUS_STOWED_EXCEPTION) in `Microsoft.UI.Xaml.dll` → an unhandled
-  exception during XAML load or navigation.
-
-**3. Known unpackaged-app gotchas** (all already handled in this codebase — don't
-reintroduce them):
-
-- `Windows.Storage.ApplicationData` **requires an MSIX package identity** and throws
-  in unpackaged apps. Persist to a file instead — see `AppSettingsService`
-  (`%LocalAppData%\Y2Akio\settings.json`).
-- `x:Bind`/`StaticResource` errors only surface at **runtime**, not compile time.
-  An undefined `Style="{StaticResource ...}"` or `Icon="..."` that isn't a real
-  `Symbol` name crashes the window at startup (e.g. `Failed to create
-  'IconElement' from the text '...'`). Use a `FontIcon` with a glyph for custom icons.
-- Event handlers that fire during `InitializeComponent` (a `ComboBox`
-  `SelectionChanged`, a `Slider` `ValueChanged`, a `CheckBox` `Checked`) can run
-  before other named controls are wired → **NullReferenceException**. Guard with
-  `if (SomeControl is null) return;` at the top of the handler.
-
-**4. Reproduce under the debugger.** In Visual Studio: set a breakpoint on the
-`App` constructor, step through, and let VS surface the exception. For a crash
-that only happens in the published (Release) exe, switch to Release config and
-F5 — trimming is disabled, so Debug/Release behavior should match.
-
-## How to use
-
-1. **Paste a link** into the URL box and hit **Analyze** (or press Enter).
-   - Single video → options panel appears (thumbnail, title, formats).
-   - Playlist → playlist checklist panel appears. Tick the videos you want, or
-     click one track to load its own download options.
-2. **Pick Video or Audio**.
-   - Video: choose container (MP4/MKV/WEBM) and quality (Best or a height like 1080p).
-   - Audio: choose format (MP3/FLAC/etc.) and bitrate (hidden for lossless).
-3. **Options**
-   - Subtitles (video only): enable, choose author/auto, language, SRT/VTT, embed/separate.
-   - File name prefix: date+time, channel, title.
-   - Thumbnail: embed / save alongside / don't download.
-   - Save Location: default `%USERPROFILE%\Downloads`, change via "Choose Folder".
-4. **Download Now**. Watch the progress bar and live log panel. On completion you
-   get a Windows toast — clicking it opens the save folder.
-5. **Download history** persists below; replay/`copy path`/open folder/delete from
-   the per-row buttons.
-
-## Cookie storage & encryption (how it works)
-
-Imported cookies are **sensitive** — they let anyone replay your logged-in browser
-session. The app never stores the file as-is.
-
-**1. Import — encrypt immediately**
-
-Settings → Download → **Import...** lets you pick *any* file (name doesn't matter, the
-content is read). The text is encrypted **before anything touches disk** using Windows
-**DPAPI-NG** (`Windows.Security.Cryptography.DataProtection.DataProtectionProvider` with
-the `LOCAL=user` descriptor — `Services/CookiesProtector.cs`):
-
-- The encryption key is derived and held **by Windows**, tied to the **current Windows
-  user account on the current machine**. No passphrase, no key file, nothing extra to
-  back up — and nothing that can be stolen from the repo.
-- Only the base64 **ciphertext** is persisted, as the `CookiesEncrypted` field inside
-  `%LocalAppData%\Y2Akio\settings.json`. The raw cookies.txt never appears in settings.
-
-**2. Use — decrypt only for the moment it's needed**
-
-When you Analyze or Download, the blob is decrypted **in memory**, written to a temp file
-at `%LocalAppData%\Y2Akio\cookies.txt` (the app's own folder, **not** `%TEMP%`), passed to
-yt-dlp as `--cookies "path"`, then **deleted immediately** after the operation finishes.
-It is also deleted on app close and whenever you press **Delete** in Settings. So
-plaintext cookies exist on disk only for the seconds an actual yt-dlp run needs the file.
-
-**3. Delete — full reset**
-
-**Delete** in Settings removes the encrypted blob *and* the decrypted temp file, then the
-row flips back to the empty "Import..." state. Nothing sensitive is left behind.
-
-**Security boundaries — read these**
-
-- **Same user, same machine only.** DPAPI `LOCAL=user` means the blob decrypts only on
-  the machine and user that imported it. Copy `settings.json` to another PC or user →
-  decryption fails → the app treats it as "no cookies". You'd re-import there.
-- **Plaintext window.** During an active analyze/download the decrypted temp file is real
-  plaintext readable by any process running as your user — that's the same trust boundary
-  as your browser having the cookies live in its profile, and it's unavoidable because
-  yt-dlp requires a real file path. The file only exists while the operation runs.
-- **No encryption on the wire.** Cookies are sent to the site over HTTPS as part of
-  normal browsing, same as your browser does.
-
-## Project layout
-
-```
-MainWindow.xaml        UI: header, URL box, options, playlist panel, log, history
-MainWindow.xaml.cs     Wiring: analyze, playlist click, options, downloads, log, toast
-PlaylistInfo.cs        AnalyzeResult / PlaylistInfo / PlaylistEntry (+ SubtitleSelection)
-VideoInfo.cs           Parsed yt-dlp --dump-json result (+ subtitle language maps)
-VideoFormat.cs         One entry from the formats[] array
-DownloadHistoryItem.cs History row model
-Services/YtDlpService.cs  Shells out to yt-dlp, parses progress, live log lines
-Services/HistoryStore.cs  Persists history.json in %LocalAppData%\Y2Akio
-Services/ToastService.cs  Windows toast notifications (AppNotificationManager)
-Services/ShortcutHelper.cs  Start-menu shortcut + AUMID for unpackaged toasts
-Services/NotificationActivator.cs  COM activator so toasts work unpackaged
-Helpers/ThumbnailHelper.cs  URL -> BitmapImage for playlist rows
-```
-
-## Troubleshooting
-
-- **"Couldn't analyze that link"** — yt-dlp error shown in the red InfoBar; full
-  stderr also lands in the log panel. Check you're online and the URL is valid.
-- **YouTube: `[youtube] <id>: This video is not available` (but the video plays in a browser)** —
-  YouTube's web client is bot-blocked for that specific video. The app now auto-retries such videos
-  via the Android player client (`player_client=android`) on both analyze and download. Trade-off:
-  some videos only offer **360p** through that client; normal videos still use the web client at full
-  quality.
-- **X/Twitter: `No video could be found in this tweet`** — the tweet's video is
-  login-gated; anonymous yt-dlp can't see it. Export your X session cookies to a
-  Netscape-format `cookies.txt` (browser extension such as "Get cookies.txt LOCALLY",
-  or `yt-dlp --cookies-from-browser edge` from a logged-in machine) and set it in
-  **Settings → Download → Browser cookies**. The app then passes `--cookies` on
-  analyze and download.
-- **Facebook: `[facebook] ...: Cannot parse data`** — Facebook's markup changes
-  periodically and breaks older yt-dlp builds; this message is yt-dlp's own "please
-  update" hint. First run `yt-dlp -U` (or replace `bin\yt-dlp.exe` with the latest
-  release). The app also passes `--impersonate chrome` for Facebook URLs to defeat
-  Meta's bot detection. For **private / friends-only** reels, the logged-in cookies
-  must be **fresh** — Facebook sessions expire, so re-export `cookies.txt` from your
-  browser and set it in **Settings → Download → Browser cookies**.
-- **No audio / no merge / leftover `.part`** — ffmpeg not found. Confirm it's in
-  `bin` (see above).
-- **No toast on download** — run the app once more after launch; registration
-  (AUMID + Start-menu shortcut) happens on first run. Check the log panel for
-  `Toast registration failed: ...` and open
-  `Windows Settings → System → Notifications` to make sure notifications are allowed.
-- **Leftover `.srt` / `.webp`** — when embedding is selected the app auto-deletes
-  loose sidecar files created by that run.
-- **`Unable to load resource dll. Microsoft.WindowsAppRuntime.Insights.Resource.dll`** on
-  users' machines — a Windows App SDK 2.x self-contained deploy gap: the 34 KB
-  `Microsoft.WindowsAppRuntime.Insights.Resource.dll` satellite is never copied next to the
-  exe. It works on dev machines only because the Windows App Runtime is installed there; it
-  fails on machines without it. The csproj now extracts that file from the runtime MSIX at
-  build/publish time (`DeployWindowsAppRuntimeInsights` target). If you still hit it, confirm
-  the file exists next to `y2akio.exe` in the publish folder.
-
-## A note on legality
-
-`yt-dlp` is a legitimate open-source tool, but downloading media can violate a
-site's Terms of Service or copyright law depending on the content and your
-jurisdiction/use case. Use responsibly.
