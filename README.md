@@ -1,5 +1,9 @@
 # Y2Akio — Media Downloader (WinUI 3)
 
+<p align="center">
+  <img src="https://media.thuvien.org/photo/3929/image/71d0e35d391ee4323089fd1b97d45835.jpg" alt="anime girl, kimono, katana, sakura blossom, profile view, traditional building" width=auto/>
+</p>
+
 Y2Akio is a WinUI 3 media downloader for Windows, built with .NET 8, Windows App SDK,
 `yt-dlp`, and `ffmpeg`. Paste a supported media URL, analyze it, choose video or audio
 options, and download it with live progress and history.
