@@ -5,8 +5,7 @@
 From the repository root:
 
 ```powershell
-dotnet restore .\y2akio.sln
-dotnet build .\y2akio.sln -c Debug -p:Platform=x64
+dotnet publish .\y2akio\y2akio.csproj -c Release -p:Platform=x64 -p:RuntimeIdentifier=win-x64 -p:PublishTrimmed=false -p:WindowsPackageType=None -p:AppxPackageSigningEnabled=false -p:GenerateAppxPackageOnBuild=false
 ```
 
 Run:
