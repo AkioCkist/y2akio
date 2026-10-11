@@ -1,60 +1,84 @@
 # Build and Publish
 
-## Build and run in development
+## Debug build
+
+From the repository root:
 
 ```powershell
-dotnet build -c Debug -p:Platform=x64
-.\\bin\\x64\\Debug\\net8.0-windows10.0.19041.0\\win-x64\\y2akio.exe
+dotnet restore .\y2akio.sln
+dotnet build .\y2akio.sln -c Debug -p:Platform=x64
 ```
 
-Alternatively, open `y2akio.sln` or `y2akio/y2akio.csproj` in Visual Studio and press **F5**. The app is unpackaged, so no MSIX installation is required for development.
-
-On first launch, the app registers the toast AUMID and Start-menu shortcut used for notifications.
-
-## Publish a standalone deployment folder
+Run:
 
 ```powershell
-dotnet publish -c Release -p:Platform=x64 -p:PublishTrimmed=false
+.\y2akio\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\y2akio.exe
 ```
 
-`PublishTrimmed=false` is required because WinUI 3 apps can break when trimming is enabled.
+You can also open `y2akio.sln` in Visual Studio, select an architecture, and press F5.
 
-The output is under:
+## Release publish
+
+The application must be distributed as a folder; a WinUI 3 self-contained deployment is not a single executable.
+
+```powershell
+dotnet publish .\y2akio\y2akio.csproj `
+  -c Release `
+  -p:Platform=x64 `
+  -p:RuntimeIdentifier=win-x64 `
+  -p:PublishTrimmed=false
+```
+
+`PublishTrimmed=false` is recommended for this application because trimming XAML-reflected types and WinUI dependencies can cause runtime failures. The output is expected under:
 
 ```text
-bin\\Release\\net8.0-windows10.0.19041.0\\win-x64\\publish\\
+y2akio\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\publish\
 ```
 
-WinUI 3 unpackaged apps cannot be distributed as a single executable. Ship or zip the complete `publish` folder, including the runtime DLLs.
+## Deployment contents
 
-Copy yt-dlp and ffmpeg into `publish\\bin`:
+Ship the complete publish directory. Confirm it includes:
+
+```text
+publish/
+├── y2akio.exe
+├── Assets/
+├── bin/
+│   ├── yt-dlp.exe
+│   └── ffmpeg-9.0.1-full_build/bin/ffmpeg.exe
+├── Microsoft.WindowsAppRuntime.Insights.Resource.dll
+└── runtime and application DLLs
+```
+
+The project contains a custom target that extracts `Microsoft.WindowsAppRuntime.Insights.Resource.dll` from the Windows App Runtime package for self-contained deployment. Verify this file on a clean machine; development machines can hide a missing runtime resource because the runtime is already installed.
+
+## Other architectures
+
+The solution declares x86, x64, and ARM64. Match `Platform` and `RuntimeIdentifier`, for example `ARM64` with `win-arm64`. External binaries must also support the target architecture. The checked-in project defaults remain x64, so validate non-x64 publish paths and runtime behavior explicitly.
+
+## Startup diagnostics
+
+Run the published executable from PowerShell and inspect the exit code:
 
 ```powershell
-cd bin\\Release\\net8.0-windows10.0.19041.0\\win-x64\\publish
-mkdir bin
-copy ..\\..\\..\\..\\..\\bin\\yt-dlp.exe .\\bin\\
-xcopy ..\\..\\..\\..\\..\\bin\\ffmpeg-9.0.1-full_build .\\bin\\ /E
+.\y2akio.exe
+$LASTEXITCODE
 ```
 
-The final layout should contain `publish\\y2akio.exe` and the media tools below `publish\\bin`. Run `y2akio.exe` from the complete folder.
+Inspect recent Windows application faults:
 
-## Debugging startup failures
+```powershell
+Get-WinEvent -FilterHashtable @{ LogName='Application'; Id=1000,1026 } -MaxEvents 20 |
+  Format-List TimeCreated, ProviderName, Message
+```
 
-1. Run the executable from a terminal and inspect the exit code:
+For runtime-only XAML or resource failures, reproduce under the Visual Studio debugger with the Release configuration.
 
-   ```powershell
-   .\\y2akio.exe; echo "exit=$LASTEXITCODE"
-   ```
+## Release checklist
 
-2. Inspect Windows Application events:
-
-   ```powershell
-   Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000,1026} -MaxEvents 20 |
-     Format-List TimeCreated, ProviderName, Message
-   ```
-
-   Event 1000 identifies application faults; event 1026 contains managed .NET exceptions.
-
-3. Reproduce under the Visual Studio debugger. For published-only failures, debug the Release configuration too.
-
-Known unpackaged-app constraints are documented in the source: `Windows.Storage.ApplicationData` needs package identity, and XAML `StaticResource`, `x:Bind`, and initialization-time event errors may appear only at runtime.
+1. Restore and build from a clean checkout.
+2. Confirm the intended `yt-dlp` and FFmpeg files were copied.
+3. Publish with trimming disabled.
+4. Launch on a machine without a preinstalled Windows App Runtime when possible.
+5. Exercise navigation, one download, one FFmpeg operation, settings persistence, and a completion toast.
+6. Zip the entire publish directory, not only `y2akio.exe`.

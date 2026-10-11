@@ -1,108 +1,90 @@
-# Y2Akio — Media Downloader (WinUI 3)
+# Y2Akio
 
 <p align="center">
-  <img src="https://media.thuvien.org/photo/3929/image/71d0e35d391ee4323089fd1b97d45835.jpg" alt="anime girl, kimono, katana, sakura blossom, profile view, traditional building" width=auto/>
+  <img src="https://media.thuvien.org/photo/3929/image/71d0e35d391ee4323089fd1b97d45835.jpg" alt="Y2Akio banner" />
 </p>
 
-Y2Akio is a WinUI 3 media downloader for Windows, built with .NET 8, Windows App SDK,
-`yt-dlp`, and `ffmpeg`. Paste a supported media URL, analyze it, choose video or audio
-options, and download it with live progress and history.
+Y2Akio is a Windows desktop media toolkit built with .NET 8 and WinUI 3. It can download media with `yt-dlp`, save TikTok photo posts, resize images, and compress images or videos with FFmpeg.
 
-## Overview
+## Table of contents
 
-- Supports individual videos and playlists.
-- Downloads video or audio with configurable quality, containers, codecs, subtitles,
-  thumbnails, metadata, and filename options.
-- Provides live logs, Windows completion notifications, and persistent download history.
-- Supports encrypted browser-cookie storage for login-gated media.
+- [What the app can do](#what-the-app-can-do)
+- [Requirements](#requirements)
+- [Quick start for developers](#quick-start-for-developers)
+- [Documentation](#documentation)
+- [Technology](#technology)
+- [Data and security](#data-and-security)
+- [Legal note](#legal-note)
 
-## Documentation
+## What the app can do
 
-Use the table of contents below to open the detailed documentation:
+- Download a single video, audio track, or selected entries from a playlist.
+- Choose quality, container, codec, audio format, subtitles, thumbnails, metadata, and filename options.
+- Save all or selected images from TikTok photo posts to a folder or ZIP archive.
+- Resize images by dimensions or percentage and convert between PNG, JPEG, BMP, TIFF, and GIF.
+- Compress video with H.264, HEVC, or AV1 using CPU or supported NVIDIA, Intel, or AMD hardware encoders.
+- Compress and convert images to WebP, JPEG, PNG, GIF, or BMP.
+- Keep download history, show live process logs, and send Windows completion notifications.
+- Use English or Vietnamese and follow the system, light, or dark theme.
 
-1. [Features](docs/features.md)
-2. [Requirements and setup](docs/requirements-and-setup.md)
-3. [How to use](docs/usage.md)
-4. [Build and publish](docs/build-and-publish.md)
-5. [Security: cookie storage and encryption](docs/security-cookies.md)
-6. [Troubleshooting](docs/troubleshooting.md)
-7. [Project layout](docs/project-layout.md)
-8. [Analyze optimization notes](docs/analyze-optimization.md)
-
-## Features
-
-- **Single video** — paste a YouTube (or any yt-dlp-supported site) URL, analyze, download.
-- **Playlist support** — analyze a playlist URL and get a checklist panel: tick which
-  videos to download, or click a single track to see *that* video's own options
-  (thumbnail, title, formats). Batch-download all checked.
-- **Video or Audio** — toggle MP4 video vs audio-only extraction.
-- **Audio formats** — MP3, M4A, AAC, FLAC, Opus, Vorbis (OGG), WAV, ALAC, WMA.
-  Lossless formats (FLAC/WAV/ALAC) auto-hide bitrate options.
-- **Subtitles** — download author-uploaded and/or YouTube auto-generated subs, pick
-  language (single-select for manual, multi-select checklist for auto), SRT/VTT,
-  embed into the file or save separately.
-- **Container / quality** — MP4/MKV/WEBM, height-based quality from the video's
-  actual formats, audio bitrate (320/256/192/128).
-- **Video codec (transcode)** — force the output codec: **H.264 (AVC)**, **HEVC (H.265)**,
-  **AV1**, **VP9**, or **MPEG-4 (Part 2)**. Whatever yt-dlp picks (2K/4K YouTube streams are
-  usually AV1/VP9), the saved file is re-encoded to the chosen codec in MP4 via ffmpeg.
-  Slow for high resolutions — it's a full encode, and quality is capped by CRF (H.264
-  `crf 18`, HEVC `crf 23`, AV1 `crf 30`, VP9 `crf 31`, MPEG-4 `-q:v 3`). AV1 uses the
-  fast SVT-AV1 encoder.
-- **Thumbnails** — embed into the file, save alongside, or skip.
-- **Metadata** — embed title/artist metadata (`--add-metadata`).
-- **Filename options** — prefix with date+time and/or channel, include title.
-- **Live download log** — collapsible panel under the options showing raw yt-dlp
-  output (progress, ffmpeg, merge, errors) while downloading.
-- **Windows toast on completion** — click the toast to open the save folder in
-  Explorer.
-- **Persistent history** — download history saved to `%LocalAppData%\Y2Akio\history.json`.
-- **Browser cookies (cookies.txt)** — import once in Settings → Download; the content is
-  **encrypted at rest** (DPAPI-NG, current Windows user only) and passed to yt-dlp via
-  `--cookies` for login-gated content (X/Twitter videos, private/age-restricted media).
+See [Features](docs/features.md) for the complete capability and format reference.
 
 ## Requirements
 
-- Windows 10 1809+ / Windows 11
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (to build)
-- [yt-dlp.exe](https://github.com/yt-dlp/yt-dlp/releases) (auto-downloaded on first run, or see below)
-- [ffmpeg](https://www.gyan.dev/ffmpeg/builds/) (required for audio extraction, format
-  conversion, subtitle/thumbnail embedding, and merging video+audio streams)
+- Windows 10 version 1809 or later, or Windows 11.
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) for development.
+- [`yt-dlp.exe`](https://github.com/yt-dlp/yt-dlp/releases) for media analysis and downloads.
+- [FFmpeg](https://www.gyan.dev/ffmpeg/builds/) for merging, conversion, embedding, and compression.
+- Visual Studio 2022 with the Windows App SDK workload is optional but recommended.
 
-## Setting up yt-dlp and ffmpeg (dev)
+Y2Akio does not download `yt-dlp` or FFmpeg automatically. Follow [Requirements and setup](docs/requirements-and-setup.md) before the first run.
 
-The app looks for the binaries in this order:
+## Quick start for developers
 
-1. `bin\yt-dlp.exe` next to the app (`AppContext.BaseDirectory\bin`)
-2. `yt-dlp.exe` next to the app
-3. `bin` on the system `PATH` (last resort)
-
-ffmpeg is searched in `bin`, `bin\ffmpeg-9.0.1-full_build\bin`, then `PATH`.
-
-For local dev, put them in the project `bin` folder (already in `.gitignore`,
-so the repo stays clean):
+From the repository root:
 
 ```powershell
-# 1. yt-dlp (single .exe, self-contained)
-#    Download the "yt-dlp.exe" asset from:
-#    https://github.com/yt-dlp/yt-dlp/releases
-Invoke-WebRequest "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile "bin\yt-dlp.exe"
-
-# 2. ffmpeg (full build, includes ffprobe/ffplay)
-#    Download from: https://www.gyan.dev/ffmpeg/builds/
-#    Extract so that bin\ffmpeg-<version>-full_build\bin\ffmpeg.exe exists.
-#    The app already scans bin\ffmpeg-*-full_build\bin automatically.
+# Put yt-dlp.exe and the extracted FFmpeg build under y2akio\bin first.
+dotnet restore .\y2akio.sln
+dotnet build .\y2akio.sln -c Debug -p:Platform=x64
+.\y2akio\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\y2akio.exe
 ```
 
-Layout after setup:
+The exact dependency layout and Visual Studio workflow are documented in the [Developer guide](docs/development.md).
 
-```
-bin/
-├── yt-dlp.exe
-└── ffmpeg-9.0.1-full_build/
-    └── bin/
-        ├── ffmpeg.exe
-        ├── ffprobe.exe
-        └── ffplay.exe
-```
+## Documentation
 
+### Users
+
+1. [Documentation index](docs/README.md)
+2. [Features and supported formats](docs/features.md)
+3. [Requirements and setup](docs/requirements-and-setup.md)
+4. [User guide](docs/usage.md)
+5. [Settings, files, and local data](docs/configuration-and-data.md)
+6. [Cookie security](docs/security-cookies.md)
+7. [Troubleshooting](docs/troubleshooting.md)
+
+### Contributors
+
+1. [Developer guide](docs/development.md)
+2. [Architecture and runtime flows](docs/architecture.md)
+3. [Project layout](docs/project-layout.md)
+4. [Build and publish](docs/build-and-publish.md)
+5. [Analyze optimization notes](docs/analyze-optimization.md)
+
+## Technology
+
+- .NET 8 and C#
+- WinUI 3 / Windows App SDK
+- `yt-dlp` for extraction and downloading
+- FFmpeg for media processing
+- Windows Imaging Component for image resizing
+- Windows DPAPI-NG for user-bound cookie encryption
+
+## Data and security
+
+Settings, encrypted cookies, and download history are stored locally under `%LocalAppData%\Y2Akio`. Imported browser cookies are encrypted for the current Windows user and decrypted to a temporary file only while an operation needs them. See [Settings, files, and local data](docs/configuration-and-data.md) and [Cookie security](docs/security-cookies.md).
+
+## Legal note
+
+Downloading media may be restricted by a site's terms of service, copyright, or local law. Only download content you are authorized to access and use.

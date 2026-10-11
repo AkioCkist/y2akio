@@ -1,50 +1,63 @@
 # Requirements and Setup
 
-## Requirements
+## Platform requirements
 
-- Windows 10 1809+ or Windows 11
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) to build
-- [yt-dlp.exe](https://github.com/yt-dlp/yt-dlp/releases)
-- [ffmpeg](https://www.gyan.dev/ffmpeg/builds/), required for audio extraction, format conversion, subtitle/thumbnail embedding, and merging video/audio streams
+- Windows 10 version 1809 (build 17763) or later, or Windows 11.
+- x64, x86, or ARM64 is declared by the solution; x64 is the default runtime used by the project file and the documented path below.
+- .NET 8 SDK for source builds.
+- Visual Studio 2022 with .NET desktop and Windows App SDK tooling is recommended for XAML development.
 
-## Set up yt-dlp and ffmpeg for development
+## External tools
 
-The app searches for yt-dlp in this order:
+Y2Akio does not download its command-line dependencies automatically.
 
-1. `bin\\yt-dlp.exe` next to the app
-2. `yt-dlp.exe` next to the app
-3. `yt-dlp.exe` on `PATH`
+- `yt-dlp.exe` is required by the Home downloader for analysis and downloads.
+- `ffmpeg.exe` is required for stream merging, audio extraction, conversion, subtitle/thumbnail embedding, video transcoding, and the Compress page.
 
-ffmpeg is searched in `bin`, `bin\\ffmpeg-<version>-full_build\\bin`, and `PATH`.
+Download them from the official [`yt-dlp` releases](https://github.com/yt-dlp/yt-dlp/releases) and a trusted [FFmpeg Windows build](https://www.gyan.dev/ffmpeg/builds/).
 
-Put the binaries in the project's `bin` folder:
+## Development dependency layout
 
-```powershell
-# yt-dlp
-Invoke-WebRequest "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile "bin\\yt-dlp.exe"
-
-# ffmpeg
-# Download and extract a full build so this file exists:
-# bin\\ffmpeg-<version>-full_build\\bin\\ffmpeg.exe
-```
-
-Expected layout:
+Place dependencies inside the **project** directory, not the repository root:
 
 ```text
-bin/
-├── yt-dlp.exe
-└── ffmpeg-9.0.1-full_build/
-    └── bin/
-        ├── ffmpeg.exe
-        ├── ffprobe.exe
-        └── ffplay.exe
+y2akio/
+└── bin/
+    ├── yt-dlp.exe
+    └── ffmpeg-9.0.1-full_build/
+        └── bin/
+            ├── ffmpeg.exe
+            ├── ffprobe.exe
+            └── ffplay.exe
 ```
+
+Create the directory and download `yt-dlp` from the repository root:
+
+```powershell
+New-Item -ItemType Directory -Force .\y2akio\bin | Out-Null
+Invoke-WebRequest `
+  "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" `
+  -OutFile ".\y2akio\bin\yt-dlp.exe"
+```
+
+Download and extract the FFmpeg full build manually so `y2akio\bin\ffmpeg-9.0.1-full_build\bin\ffmpeg.exe` exists. The current project file explicitly copies that versioned path to build and publish output. If the extracted directory uses another version, rename it or update `y2akio.csproj` and the FFmpeg lookup code together.
 
 Verify the tools:
 
 ```powershell
-.\\bin\\yt-dlp.exe --version
-.\\bin\\ffmpeg-9.0.1-full_build\\bin\\ffmpeg.exe -version
+.\y2akio\bin\yt-dlp.exe --version
+.\y2akio\bin\ffmpeg-9.0.1-full_build\bin\ffmpeg.exe -version
 ```
 
-The `bin` folder is ignored by git so local binaries do not enter the repository.
+## Runtime lookup behavior
+
+The project copies both executables to the application output. The downloader is constructed with the copied `bin\yt-dlp.exe` and FFmpeg directory. The Compress page searches these runtime locations:
+
+1. `bin\ffmpeg-9.0.1-full_build\bin\ffmpeg.exe`
+2. `bin\ffmpeg.exe`
+3. `ffmpeg.exe` beside the app
+
+## Next steps
+
+- Contributors: continue with the [Developer guide](development.md).
+- Users: continue with the [User guide](usage.md).

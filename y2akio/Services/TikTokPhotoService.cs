@@ -1,11 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.IO.Compression;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -22,12 +18,7 @@ namespace y2akio.Services;
 /// </summary>
 public class TikTokPhotoService
 {
-    private const string UserAgent =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
-
-    // UseCookies=false: the imported jar is sent as a hand-built Cookie header (tiktok.com only),
-    // so it never leaks to the CDN hosts the images are fetched from.
-    private static readonly HttpClient _http = CreateClient();
+    public const string Referer = "https://www.tiktok.com/";
 
     private static readonly Regex RehydrationRegex = new(
         @"<script[^>]+id=""__UNIVERSAL_DATA_FOR_REHYDRATION__""[^>]*>(.*?)</script>",
@@ -39,24 +30,10 @@ public class TikTokPhotoService
 
     private static readonly Regex PostIdRegex = new(@"/(?:photo|video)/(\d+)", RegexOptions.Compiled);
 
-    private static HttpClient CreateClient()
-    {
-        var handler = new HttpClientHandler
-        {
-            UseCookies = false,
-            AllowAutoRedirect = true,
-            AutomaticDecompression = DecompressionMethods.All,
-        };
-        var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
-        client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en-US,en;q=0.9");
-        return client;
-    }
-
     /// <summary>True for a direct <c>tiktok.com/.../photo/&lt;id&gt;</c> link.</summary>
     public static bool IsPhotoUrl(string url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri)
-        && IsTikTokHost(uri.Host)
+        && MediaGalleryService.IsHostOf(uri.Host, "tiktok.com")
         && uri.AbsolutePath.Contains("/photo/", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>True for share short links (vt./vm.tiktok.com, tiktok.com/t/...) whose target is unknown until resolved.</summary>
@@ -64,11 +41,7 @@ public class TikTokPhotoService
         Uri.TryCreate(url, UriKind.Absolute, out var uri)
         && (uri.Host.Equals("vt.tiktok.com", StringComparison.OrdinalIgnoreCase)
             || uri.Host.Equals("vm.tiktok.com", StringComparison.OrdinalIgnoreCase)
-            || (IsTikTokHost(uri.Host) && uri.AbsolutePath.StartsWith("/t/", StringComparison.OrdinalIgnoreCase)));
-
-    private static bool IsTikTokHost(string host) =>
-        host.Equals("tiktok.com", StringComparison.OrdinalIgnoreCase)
-        || host.EndsWith(".tiktok.com", StringComparison.OrdinalIgnoreCase);
+            || (MediaGalleryService.IsHostOf(uri.Host, "tiktok.com") && uri.AbsolutePath.StartsWith("/t/", StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>Follows a share short link's redirects and returns the final URL (or the input on failure).</summary>
     public async Task<string> ResolveShortLinkAsync(string url, CancellationToken ct = default)
@@ -76,7 +49,7 @@ public class TikTokPhotoService
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var response = await MediaGalleryService.Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
             return response.RequestMessage?.RequestUri?.ToString() ?? url;
         }
         catch (OperationCanceledException) { throw; }
@@ -92,7 +65,7 @@ public class TikTokPhotoService
     /// form is tried first, then the original URL as a fallback.
     /// </summary>
     /// <param name="cookiesText">Netscape cookies.txt content (only tiktok.com entries are sent). Null/empty = anonymous.</param>
-    public async Task<TikTokPhotoPost> FetchPostAsync(string url, string? cookiesText, CancellationToken ct = default)
+    public async Task<MediaGalleryPost> FetchPostAsync(string url, string? cookiesText, CancellationToken ct = default)
     {
         var idMatch = PostIdRegex.Match(url);
         if (!idMatch.Success)
@@ -100,7 +73,7 @@ public class TikTokPhotoService
 
         var postId = idMatch.Groups[1].Value;
         var user = ExtractUser(url);
-        var cookieHeader = BuildCookieHeader(cookiesText);
+        var cookieHeader = MediaGalleryService.BuildCookieHeader(cookiesText, d => MediaGalleryService.IsHostOf(d, "tiktok.com"));
 
         var candidates = new List<string> { $"https://www.tiktok.com/@{user}/video/{postId}" };
         if (!candidates.Contains(url)) candidates.Add(url);
@@ -111,12 +84,12 @@ public class TikTokPhotoService
             ct.ThrowIfCancellationRequested();
             try
             {
-                var html = await GetPageAsync(candidate, cookieHeader, ct);
+                var (html, _) = await MediaGalleryService.GetPageAsync(candidate, cookieHeader, ct);
                 var item = FindItemStruct(html);
                 if (item is null) continue;
 
                 var post = ParsePost(item.Value, postId, user);
-                if (post.Images.Count > 0) return post;
+                if (post.Items.Count > 0) return post;
                 lastError = "This TikTok post has no photos (it's a regular video — paste it as a normal link).";
             }
             catch (OperationCanceledException) { throw; }
@@ -129,84 +102,7 @@ public class TikTokPhotoService
         throw new InvalidOperationException(lastError);
     }
 
-    /// <summary>Downloads one image's bytes, trying each CDN mirror in its url list until one succeeds.</summary>
-    public async Task<byte[]> DownloadImageAsync(TikTokPhotoItem image, CancellationToken ct = default)
-    {
-        Exception? last = null;
-        foreach (var url in image.Urls)
-        {
-            try
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                request.Headers.Referrer = new Uri("https://www.tiktok.com/");
-                using var response = await _http.SendAsync(request, ct);
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadAsByteArrayAsync(ct);
-            }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex)
-            {
-                last = ex;
-            }
-        }
-        throw new InvalidOperationException($"Couldn't download photo {image.Index}: {last?.Message ?? "no URL"}");
-    }
-
-    /// <summary>Writes the given images as loose files into <paramref name="folder"/>. Returns the written paths.</summary>
-    public static async Task<List<string>> SaveToFolderAsync(
-        TikTokPhotoPost post, IReadOnlyList<TikTokPhotoItem> images, string folder, CancellationToken ct = default)
-    {
-        Directory.CreateDirectory(folder);
-        var written = new List<string>();
-        foreach (var image in images)
-        {
-            ct.ThrowIfCancellationRequested();
-            var path = UniquePath(Path.Combine(folder, FileNameFor(post, image)));
-            await File.WriteAllBytesAsync(path, image.Bytes!, ct);
-            written.Add(path);
-        }
-        return written;
-    }
-
-    /// <summary>Packs the given images into a single .zip at <paramref name="zipPath"/> (overwrites nothing — picks a free name).</summary>
-    public static async Task<string> SaveAsZipAsync(
-        TikTokPhotoPost post, IReadOnlyList<TikTokPhotoItem> images, string zipPath, CancellationToken ct = default)
-    {
-        var dir = Path.GetDirectoryName(zipPath);
-        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-        zipPath = UniquePath(zipPath);
-
-        await using var stream = new FileStream(zipPath, FileMode.CreateNew, FileAccess.Write);
-        using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
-        foreach (var image in images)
-        {
-            ct.ThrowIfCancellationRequested();
-            // Images are already compressed — Store avoids burning CPU for ~0% gain.
-            var entry = archive.CreateEntry(FileNameFor(post, image), CompressionLevel.NoCompression);
-            await using var entryStream = entry.Open();
-            await entryStream.WriteAsync(image.Bytes!, ct);
-        }
-        return zipPath;
-    }
-
-    /// <summary>"author_postId" — used for the per-post subfolder and the zip name.</summary>
-    public static string BaseNameFor(TikTokPhotoPost post) => SanitizeFileName($"{post.Author}_{post.Id}");
-
-    private static string FileNameFor(TikTokPhotoPost post, TikTokPhotoItem image) =>
-        $"{BaseNameFor(post)}_{image.Index:D2}.{image.Extension}";
-
-    // ─── Page fetch + parse ──────────────────────────────────────────────────
-
-    private static async Task<string> GetPageAsync(string url, string cookieHeader, CancellationToken ct)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-        if (!string.IsNullOrEmpty(cookieHeader)) request.Headers.TryAddWithoutValidation("Cookie", cookieHeader);
-
-        using var response = await _http.SendAsync(request, ct);
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadAsStringAsync(ct);
-    }
+    // ─── Page parse ──────────────────────────────────────────────────────────
 
     /// <summary>
     /// Pulls the item object out of either page-data format TikTok has shipped
@@ -261,7 +157,7 @@ public class TikTokPhotoService
         return null;
     }
 
-    private static TikTokPhotoPost ParsePost(JsonElement item, string postId, string userFromUrl)
+    private static MediaGalleryPost ParsePost(JsonElement item, string postId, string userFromUrl)
     {
         string Str(JsonElement e, string name) =>
             e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
@@ -285,7 +181,7 @@ public class TikTokPhotoService
         var title = Str(imagePost, "title");
         var desc = Str(item, "desc");
 
-        var images = new List<TikTokPhotoItem>();
+        var images = new List<MediaGalleryItem>();
         if (imagePost.TryGetProperty("images", out var imagesEl) && imagesEl.ValueKind == JsonValueKind.Array)
         {
             var index = 1;
@@ -307,7 +203,7 @@ public class TikTokPhotoService
                 urls = urls.OrderBy(u => u.Contains(".jpeg", StringComparison.OrdinalIgnoreCase)
                                          || u.Contains(".jpg", StringComparison.OrdinalIgnoreCase) ? 0 : 1).ToList();
 
-                images.Add(new TikTokPhotoItem
+                images.Add(new MediaGalleryItem
                 {
                     Index = index++,
                     Urls = urls,
@@ -317,69 +213,21 @@ public class TikTokPhotoService
             }
         }
 
-        return new TikTokPhotoPost
+        return new MediaGalleryPost
         {
+            Source = "TikTok",
             Id = Str(item, "id") is { Length: > 0 } id ? id : postId,
             Author = string.IsNullOrWhiteSpace(author) ? "tiktok" : author,
             Nickname = nickname,
             Title = !string.IsNullOrWhiteSpace(title) ? title : desc,
-            Images = images,
+            Items = images,
+            Referer = TikTokPhotoService.Referer,
         };
     }
-
-    // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private static string ExtractUser(string url)
     {
         var m = Regex.Match(url, @"/@([^/?#]+)");
         return m.Success ? Uri.UnescapeDataString(m.Groups[1].Value) : "tiktok";
-    }
-
-    /// <summary>Builds a Cookie header from the tiktok.com entries of a Netscape cookies.txt (expired ones skipped).</summary>
-    private static string BuildCookieHeader(string? cookiesText)
-    {
-        if (string.IsNullOrWhiteSpace(cookiesText)) return "";
-
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var pairs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var raw in cookiesText.Split('\n'))
-        {
-            var line = raw.TrimEnd('\r');
-            if (line.StartsWith("#HttpOnly_", StringComparison.Ordinal)) line = line["#HttpOnly_".Length..];
-            else if (line.StartsWith('#') || string.IsNullOrWhiteSpace(line)) continue;
-
-            var parts = line.Split('\t');
-            if (parts.Length < 7) continue;
-            if (!IsTikTokHost(parts[0].TrimStart('.'))) continue;
-            if (long.TryParse(parts[4], out var expiry) && expiry > 0 && expiry < now) continue;
-
-            var name = parts[5];
-            var value = parts[6];
-            // Header values must stay single-line ASCII; drop anything that would make the header invalid.
-            if (name.Length == 0 || (name + value).Any(c => c < 0x20 || c > 0x7E || c == ';')) continue;
-            pairs[name] = value;
-        }
-        return string.Join("; ", pairs.Select(p => $"{p.Key}={p.Value}"));
-    }
-
-    private static string SanitizeFileName(string name)
-    {
-        var invalid = Path.GetInvalidFileNameChars();
-        var sb = new StringBuilder(name.Length);
-        foreach (var c in name) sb.Append(invalid.Contains(c) ? '_' : c);
-        return sb.ToString().Trim().TrimEnd('.');
-    }
-
-    private static string UniquePath(string path)
-    {
-        if (!File.Exists(path)) return path;
-        var dir = Path.GetDirectoryName(path) ?? "";
-        var stem = Path.GetFileNameWithoutExtension(path);
-        var ext = Path.GetExtension(path);
-        for (var i = 2; ; i++)
-        {
-            var candidate = Path.Combine(dir, $"{stem} ({i}){ext}");
-            if (!File.Exists(candidate)) return candidate;
-        }
     }
 }

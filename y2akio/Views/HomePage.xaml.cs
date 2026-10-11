@@ -36,9 +36,13 @@ public sealed partial class HomePage : Page
     private int _activeDownloads;      // so an analyze finish never re-enables DownloadNow mid-download
 
     private readonly TikTokPhotoService _tikTok = new();
-    private TikTokPhotoPost? _currentTikTokPost;
-    private CancellationTokenSource? _tikTokLoadCts; // cancels gallery loading when another post replaces it
-    private bool _tikTokDownloading;
+    private readonly FacebookStoryService _facebookStories = new();
+    private readonly InstagramStoryService _instagramStories = new();
+    private readonly FacebookPostService _facebookPosts = new();
+    private readonly InstagramPostService _instagramPosts = new();
+    private MediaGalleryPost? _currentGalleryPost;
+    private CancellationTokenSource? _galleryLoadCts; // cancels thumbnail loading when another post replaces it
+    private bool _galleryDownloading;
 
     /// <summary>
     /// Looks for yt-dlp.exe next to the running app first (so it works after you publish/copy
@@ -204,14 +208,14 @@ public sealed partial class HomePage : Page
         UpdateDownloadPlaylistButton();
 
         // TikTok photo gallery
-        TikTokSelectAllButton.Content    = L("Home.SelectAll");
-        TikTokDeselectAllButton.Content  = L("Home.DeselectAll");
-        TikTokGalleryHint.Text           = L("Home.TikTokGalleryHint");
-        ToolTipService.SetToolTip(ChooseTikTokFolderButton, L("Home.TikTokSaveLocation"));
-        ToolTipService.SetToolTip(TikTokSaveModeComboBox, L("Home.TikTokSaveAs"));
-        TikTokSaveFolderItem.Content     = L("Home.TikTokSaveFolder");
-        TikTokSaveZipItem.Content        = L("Home.TikTokSaveZip");
-        UpdateTikTokButtons();
+        GallerySelectAllButton.Content    = L("Home.SelectAll");
+        GalleryDeselectAllButton.Content  = L("Home.DeselectAll");
+        GalleryHint.Text           = L("Home.GalleryHint");
+        ToolTipService.SetToolTip(ChooseGalleryFolderButton, L("Home.GallerySaveLocation"));
+        ToolTipService.SetToolTip(GallerySaveModeComboBox, L("Home.GallerySaveAs"));
+        GallerySaveFolderItem.Content     = L("Home.GallerySaveFolder");
+        GallerySaveZipItem.Content        = L("Home.GallerySaveZip");
+        UpdateGalleryButtons();
     }
 
     private static string L(string key) => LocalizationService.Get(key);
@@ -245,17 +249,19 @@ public sealed partial class HomePage : Page
         ErrorBar.IsOpen = false;
         OptionsPanel.Visibility = Visibility.Collapsed;
         PlaylistPanel.Visibility = Visibility.Collapsed;
-        if (!_tikTokDownloading) TikTokPhotoPanel.Visibility = Visibility.Collapsed;
+        if (!_galleryDownloading) GalleryPanel.Visibility = Visibility.Collapsed;
         AnalyzingRing.IsActive = true;
         AnalyzeButton.IsEnabled = false;
 
         string cookiesPath = "";
         try
         {
-            // TikTok photo posts never reach yt-dlp (it only extracts their audio) — they get the gallery instead.
-            if (await TryResolveTikTokPhotoUrlAsync(url) is { } photoUrl)
+            // TikTok photo posts (yt-dlp only extracts their audio), Facebook / Instagram photo posts and
+            // stories (photos unsupported / login-only in yt-dlp) never reach yt-dlp — they get the
+            // pick-and-save gallery instead.
+            if (await TryFetchGalleryPostAsync(url) is { } galleryPost)
             {
-                await AnalyzeTikTokPhotoAsync(photoUrl);
+                ShowGalleryPost(galleryPost);
                 return;
             }
 
@@ -431,74 +437,98 @@ public sealed partial class HomePage : Page
         }
     }
 
-    // ─── TikTok photo posts ───────────────────────────────────────────────────
+    // ─── Gallery posts (TikTok photo posts, Facebook / Instagram posts + stories) ─
 
     /// <summary>
-    /// Returns the URL to scrape when the link is a TikTok photo post, else null. Share short links
+    /// Fetches the link as a gallery post when it is one (TikTok photo post, Facebook / Instagram post
+    /// or story), else returns null so the normal yt-dlp flow handles it. TikTok share short links
     /// (vt./vm.tiktok.com) only reveal whether they point at a photo post after their redirect resolves.
     /// </summary>
-    private async Task<string?> TryResolveTikTokPhotoUrlAsync(string url)
+    private async Task<MediaGalleryPost?> TryFetchGalleryPostAsync(string url)
     {
-        if (TikTokPhotoService.IsPhotoUrl(url)) return url;
-        if (!TikTokPhotoService.IsShortLink(url)) return null;
+        Func<string?, Task<MediaGalleryPost?>>? fetch = null;
+        if (FacebookStoryService.IsStoryUrl(url)) fetch = async c => await _facebookStories.FetchStoryAsync(url, c);
+        else if (FacebookPostService.IsPostUrl(url)) fetch = c => _facebookPosts.FetchPostAsync(url, c); // null = video post → yt-dlp
+        else if (InstagramStoryService.IsStoryUrl(url)) fetch = async c => await _instagramStories.FetchStoryAsync(url, c);
+        else if (InstagramPostService.IsPostUrl(url)) fetch = async c => await _instagramPosts.FetchPostAsync(url, c);
+        else if (TikTokPhotoService.IsPhotoUrl(url)) fetch = async c => await _tikTok.FetchPostAsync(url, c);
+        else if (TikTokPhotoService.IsShortLink(url))
+        {
+            var resolved = await _tikTok.ResolveShortLinkAsync(url);
+            if (TikTokPhotoService.IsPhotoUrl(resolved)) fetch = async c => await _tikTok.FetchPostAsync(resolved, c);
+        }
+        if (fetch is null) return null;
 
-        var resolved = await _tikTok.ResolveShortLinkAsync(url);
-        return TikTokPhotoService.IsPhotoUrl(resolved) ? resolved : null;
-    }
-
-    private async Task AnalyzeTikTokPhotoAsync(string url)
-    {
-        if (_tikTokDownloading)
-            throw new InvalidOperationException(L("Home.TikTokBusy"));
+        if (_galleryDownloading)
+            throw new InvalidOperationException(L("Home.GalleryBusy"));
 
         // Cookies are decrypted in memory only — this path never needs the plaintext cookies.txt on disk.
-        var cookiesText = await AppSettingsService.Instance.DecryptCookiesAsync();
-        var post = await _tikTok.FetchPostAsync(url, cookiesText);
-        ShowTikTokPost(post);
+        return await fetch(await AppSettingsService.Instance.DecryptCookiesAsync());
     }
 
-    private void ShowTikTokPost(TikTokPhotoPost post)
+    private void ShowGalleryPost(MediaGalleryPost post)
     {
-        _tikTokLoadCts?.Cancel();
-        _tikTokLoadCts = new CancellationTokenSource();
+        _galleryLoadCts?.Cancel();
+        _galleryLoadCts = new CancellationTokenSource();
 
-        _currentTikTokPost = post;
-        TikTokPostTitleText.Text = string.IsNullOrWhiteSpace(post.Title) ? $"@{post.Author}" : post.Title.Trim();
-        var meta = new List<string> { string.Format(L("Home.TikTokPhotoCount"), post.Images.Count), $"@{post.Author}" };
-        if (!string.IsNullOrWhiteSpace(post.Nickname)) meta.Add(post.Nickname);
-        TikTokPostMetaText.Text = string.Join(" · ", meta);
+        _currentGalleryPost = post;
+        GalleryTitleText.Text = !string.IsNullOrWhiteSpace(post.Title) ? post.Title.Trim()
+            : !string.IsNullOrWhiteSpace(post.Nickname) ? post.Nickname
+            : $"@{post.Author}";
 
-        if (string.IsNullOrWhiteSpace(TikTokSaveLocationText.Text))
-            TikTokSaveLocationText.Text = AppSettingsService.Instance.VideoSaveFolder;
+        var meta = new List<string> { post.Source };
+        var photos = post.Items.Count(i => !i.IsVideo);
+        var videos = post.Items.Count - photos;
+        if (photos > 0) meta.Add(string.Format(L("Home.GalleryPhotoCount"), photos));
+        if (videos > 0) meta.Add(string.Format(L("Home.GalleryVideoCount"), videos));
+        meta.Add($"@{post.Author}");
+        if (!string.IsNullOrWhiteSpace(post.Nickname) && post.Nickname != GalleryTitleText.Text) meta.Add(post.Nickname);
+        GalleryMetaText.Text = string.Join(" · ", meta);
 
-        TikTokPhotoGrid.ItemsSource = post.Images;
-        TikTokProgressPanel.Visibility = Visibility.Collapsed;
-        UpdateTikTokButtons();
-        TikTokPhotoPanel.Visibility = Visibility.Visible;
+        if (string.IsNullOrWhiteSpace(GallerySaveLocationText.Text))
+            GallerySaveLocationText.Text = AppSettingsService.Instance.VideoSaveFolder;
 
-        _ = LoadTikTokThumbnailsAsync(post, _tikTokLoadCts.Token);
+        GalleryGrid.ItemsSource = post.Items;
+        GalleryProgressPanel.Visibility = Visibility.Collapsed;
+        UpdateGalleryButtons();
+        GalleryPanel.Visibility = Visibility.Visible;
+
+        _ = LoadGalleryThumbnailsAsync(post, _galleryLoadCts.Token);
     }
 
     /// <summary>
-    /// Fetches every photo once (4 at a time) and paints its gallery tile. The bytes are kept on the
-    /// item so saving later is instant and never hits the CDN twice. Runs on the UI context, so the
-    /// item property updates are safe.
+    /// Paints every tile (4 fetches at a time). Photos fetch their full-size bytes once and keep them on
+    /// the item, so saving later is instant and never hits the CDN twice; videos (and lazily-resolved
+    /// photos) only fetch their thumbnail here. Runs on the UI context, so the item property updates are safe.
     /// </summary>
-    private async Task LoadTikTokThumbnailsAsync(TikTokPhotoPost post, CancellationToken ct)
+    private async Task LoadGalleryThumbnailsAsync(MediaGalleryPost post, CancellationToken ct)
     {
         using var gate = new SemaphoreSlim(4);
-        var tasks = post.Images.Select(async image =>
+        var tasks = post.Items.Select(async item =>
         {
             await gate.WaitAsync(ct);
             try
             {
-                image.Bytes ??= await _tikTok.DownloadImageAsync(image, ct);
-                image.Thumbnail = await CreateBitmapAsync(image.Bytes, decodeWidth: 344);
+                byte[] tileBytes;
+                if (item.ThumbnailUrls.Count > 0)
+                {
+                    tileBytes = await MediaGalleryService.DownloadAsync(item.ThumbnailUrls, post.Referer, ct);
+                }
+                else if (item.IsVideo)
+                {
+                    item.Failed = true;
+                    return;
+                }
+                else
+                {
+                    tileBytes = await MediaGalleryService.GetItemBytesAsync(item, post.Referer, ct);
+                }
+                item.Thumbnail = await CreateBitmapAsync(tileBytes, decodeWidth: 344);
             }
             catch (OperationCanceledException) { /* a newer analyze replaced this post */ }
             catch
             {
-                image.Failed = true; // HEIC without the codec, or the CDN refused — the save step retries the fetch
+                item.Failed = true; // HEIC without the codec, or the CDN refused — the save step retries the fetch
             }
             finally
             {
@@ -519,137 +549,160 @@ public sealed partial class HomePage : Page
         return bitmap;
     }
 
-    private void TikTokPhotoGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateTikTokButtons();
+    private void GalleryGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateGalleryButtons();
 
-    private void TikTokSelectAllButton_Click(object sender, RoutedEventArgs e) => TikTokPhotoGrid.SelectAll();
+    private void GallerySelectAllButton_Click(object sender, RoutedEventArgs e) => GalleryGrid.SelectAll();
 
-    private void TikTokDeselectAllButton_Click(object sender, RoutedEventArgs e) => TikTokPhotoGrid.SelectedItems.Clear();
+    private void GalleryDeselectAllButton_Click(object sender, RoutedEventArgs e) => GalleryGrid.SelectedItems.Clear();
 
-    private void UpdateTikTokButtons()
+    private void UpdateGalleryButtons()
     {
-        var total = _currentTikTokPost?.Images.Count ?? 0;
-        var selected = TikTokPhotoGrid.SelectedItems.Count;
+        var total = _currentGalleryPost?.Items.Count ?? 0;
+        var selected = GalleryGrid.SelectedItems.Count;
 
         var selectedText = L("Home.DownloadSelected");
-        TikTokDownloadSelectedButton.Content = selected > 0 ? $"{selectedText} ({selected})" : selectedText;
-        TikTokDownloadAllButton.Content = $"{L("Home.TikTokDownloadAll")} ({total})";
+        GalleryDownloadSelectedButton.Content = selected > 0 ? $"{selectedText} ({selected})" : selectedText;
+        GalleryDownloadAllButton.Content = $"{L("Home.GalleryDownloadAll")} ({total})";
 
-        TikTokDownloadSelectedButton.IsEnabled = selected > 0 && !_tikTokDownloading;
-        TikTokDownloadAllButton.IsEnabled = total > 0 && !_tikTokDownloading;
+        GalleryDownloadSelectedButton.IsEnabled = selected > 0 && !_galleryDownloading;
+        GalleryDownloadAllButton.IsEnabled = total > 0 && !_galleryDownloading;
     }
 
-    /// <summary>Double-click a tile: show the photo full size in a dialog.</summary>
-    private async void TikTokPhotoGrid_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    /// <summary>Double-click a tile: show the photo full size, or play the video, in a dialog.</summary>
+    private async void GalleryGrid_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
-        if ((e.OriginalSource as FrameworkElement)?.DataContext is not TikTokPhotoItem { Bytes: { } bytes } image)
-            return;
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is not MediaGalleryItem item) return;
 
-        BitmapImage bitmap;
-        try { bitmap = await CreateBitmapAsync(bytes); }
-        catch { return; }
-
-        var dialog = new ContentDialog
+        UIElement content;
+        MediaPlayerElement? player = null;
+        if (item.IsVideo)
         {
-            XamlRoot = XamlRoot,
-            Title = $"{image.Index} / {_currentTikTokPost?.Images.Count ?? 0}",
-            CloseButtonText = L("Settings.Ok"),
-            Content = new ScrollViewer
+            if (item.Urls.Count == 0 || !Uri.TryCreate(item.Urls[0], UriKind.Absolute, out var videoUri)) return;
+            player = new MediaPlayerElement
+            {
+                Source = Windows.Media.Core.MediaSource.CreateFromUri(videoUri),
+                AreTransportControlsEnabled = true,
+                AutoPlay = true,
+                MaxHeight = 620,
+                Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform,
+            };
+            content = player;
+        }
+        else
+        {
+            BitmapImage bitmap;
+            try { bitmap = await CreateBitmapAsync(await MediaGalleryService.GetItemBytesAsync(item, _currentGalleryPost?.Referer)); }
+            catch { return; }
+
+            content = new ScrollViewer
             {
                 MaxHeight = 640,
                 ZoomMode = ZoomMode.Enabled,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
                 Content = new Image { Source = bitmap, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, MaxHeight = 620 },
-            },
+            };
+        }
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = $"{item.Index} / {_currentGalleryPost?.Items.Count ?? 0}",
+            CloseButtonText = L("Settings.Ok"),
+            Content = content,
         };
         await dialog.ShowAsync();
+
+        // Stop playback/buffering once the dialog is gone.
+        if (player is not null)
+        {
+            player.MediaPlayer?.Pause();
+            (player.Source as IDisposable)?.Dispose();
+            player.Source = null;
+        }
     }
 
-    private async void ChooseTikTokFolderButton_Click(object sender, RoutedEventArgs e)
+    private async void ChooseGalleryFolderButton_Click(object sender, RoutedEventArgs e)
     {
         var folder = await PickFolderAsync();
         if (folder != null)
-            TikTokSaveLocationText.Text = folder.Path;
+            GallerySaveLocationText.Text = folder.Path;
     }
 
-    private void TikTokDownloadSelectedButton_Click(object sender, RoutedEventArgs e)
+    private void GalleryDownloadSelectedButton_Click(object sender, RoutedEventArgs e)
     {
         // Keep post order regardless of the order the user clicked tiles in.
-        var selected = TikTokPhotoGrid.SelectedItems.OfType<TikTokPhotoItem>().OrderBy(i => i.Index).ToList();
-        _ = SaveTikTokPhotosAsync(selected);
+        var selected = GalleryGrid.SelectedItems.OfType<MediaGalleryItem>().OrderBy(i => i.Index).ToList();
+        _ = SaveGalleryItemsAsync(selected);
     }
 
-    private void TikTokDownloadAllButton_Click(object sender, RoutedEventArgs e)
+    private void GalleryDownloadAllButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_currentTikTokPost is { } post)
-            _ = SaveTikTokPhotosAsync(post.Images);
+        if (_currentGalleryPost is { } post)
+            _ = SaveGalleryItemsAsync(post.Items);
     }
 
     /// <summary>
-    /// Saves the given photos as loose files in a per-post subfolder (<c>author_postId\</c>) or as one
-    /// <c>author_postId.zip</c>, depending on the "Save as" choice. Photos the gallery couldn't fetch
-    /// yet are downloaded first.
+    /// Saves the given items as loose files in a per-post subfolder (<c>author_postId\</c>) or as one
+    /// <c>author_postId.zip</c>, depending on the "Save as" choice. Videos, and photos the gallery
+    /// couldn't fetch yet, are downloaded first.
     /// </summary>
-    private async Task SaveTikTokPhotosAsync(IReadOnlyList<TikTokPhotoItem> images)
+    private async Task SaveGalleryItemsAsync(IReadOnlyList<MediaGalleryItem> items)
     {
-        if (_currentTikTokPost is not { } post || images.Count == 0 || _tikTokDownloading) return;
+        if (_currentGalleryPost is not { } post || items.Count == 0 || _galleryDownloading) return;
 
-        var saveFolder = TikTokSaveLocationText.Text?.Trim();
+        var saveFolder = GallerySaveLocationText.Text?.Trim();
         if (string.IsNullOrWhiteSpace(saveFolder)) saveFolder = AppSettingsService.Instance.VideoSaveFolder;
-        var asZip = TikTokSaveModeComboBox.SelectedIndex == 1;
+        var asZip = GallerySaveModeComboBox.SelectedIndex == 1;
 
-        _tikTokDownloading = true;
-        UpdateTikTokButtons();
+        _galleryDownloading = true;
+        UpdateGalleryButtons();
         ErrorBar.IsOpen = false;
         SuccessBar.IsOpen = false;
-        TikTokProgressBar.Value = 0;
-        TikTokProgressPanel.Visibility = Visibility.Visible;
+        GalleryProgressBar.Value = 0;
+        GalleryProgressPanel.Visibility = Visibility.Visible;
         ShowLogPanel();
-        AppendLog($"TikTok photo post {post.Id} by @{post.Author}: saving {images.Count} photo(s){(asZip ? " as ZIP" : "")}");
+        AppendLog($"{post.Source} {post.Id} by @{post.Author}: saving {items.Count} item(s){(asZip ? " as ZIP" : "")}");
 
         try
         {
-            var done = 0;
-            foreach (var image in images)
+            var payloads = new List<(MediaGalleryItem Item, byte[] Data)>();
+            foreach (var item in items)
             {
-                if (image.Bytes is null)
-                {
-                    TikTokStatusText.Text = string.Format(L("Home.TikTokFetching"), image.Index);
-                    image.Bytes = await _tikTok.DownloadImageAsync(image);
-                }
-                done++;
-                TikTokProgressBar.Value = done * 90.0 / images.Count; // last 10% = writing to disk
+                GalleryStatusText.Text = string.Format(L("Home.GalleryFetching"), payloads.Count + 1, items.Count);
+                payloads.Add((item, await MediaGalleryService.GetItemBytesAsync(item, post.Referer)));
+                GalleryProgressBar.Value = payloads.Count * 90.0 / items.Count; // last 10% = writing to disk
             }
 
-            TikTokStatusText.Text = L("Home.TikTokWriting");
-            var baseName = TikTokPhotoService.BaseNameFor(post);
+            GalleryStatusText.Text = L("Home.GalleryWriting");
+            var baseName = MediaGalleryService.BaseNameFor(post);
             string resultPath;
             string folderPath;
             if (asZip)
             {
-                resultPath = await TikTokPhotoService.SaveAsZipAsync(post, images, Path.Combine(saveFolder, baseName + ".zip"));
+                resultPath = await MediaGalleryService.SaveAsZipAsync(post, payloads, Path.Combine(saveFolder, baseName + ".zip"));
                 folderPath = saveFolder;
             }
             else
             {
                 folderPath = Path.Combine(saveFolder, baseName);
-                var written = await TikTokPhotoService.SaveToFolderAsync(post, images, folderPath);
+                var written = await MediaGalleryService.SaveToFolderAsync(post, payloads, folderPath);
                 resultPath = written[0];
             }
 
-            TikTokProgressBar.Value = 100;
-            TikTokStatusText.Text = L("Home.TikTokDone");
+            GalleryProgressBar.Value = 100;
+            GalleryStatusText.Text = L("Home.GalleryDone");
             var savedTarget = asZip ? resultPath : folderPath;
             AppendLog($"Saved: {savedTarget}");
 
-            var title = string.IsNullOrWhiteSpace(post.Title) ? $"@{post.Author} · {post.Id}" : post.Title.Trim();
+            var title = !string.IsNullOrWhiteSpace(post.Title) ? post.Title.Trim() : $"@{post.Author} · {post.Id}";
             ToastService.ShowDownloadComplete(title, resultPath);
-            ShowDownloadComplete(string.Format(L("Home.TikTokSaved"), images.Count, savedTarget));
+            ShowDownloadComplete(string.Format(L("Home.GallerySaved"), items.Count, savedTarget));
 
             _history.Insert(0, new DownloadHistoryItem
             {
                 Title = title,
-                Kind = MediaKind.Image,
-                QualityLabel = asZip ? $"ZIP · {images.Count} photos" : $"{images.Count} photos",
+                Kind = items.All(i => i.IsVideo) ? MediaKind.Video : MediaKind.Image,
+                QualityLabel = $"{post.Source} · {(asZip ? "ZIP · " : "")}{items.Count} file(s)",
                 FilePath = resultPath,
                 FolderPath = folderPath,
                 CompletedAt = DateTime.Now,
@@ -659,14 +712,14 @@ public sealed partial class HomePage : Page
         catch (Exception ex)
         {
             AppendLog($"ERROR: {ex.Message}");
-            TikTokStatusText.Text = ex.Message;
+            GalleryStatusText.Text = ex.Message;
             ErrorBar.Message = ex.Message;
             ErrorBar.IsOpen = true;
         }
         finally
         {
-            _tikTokDownloading = false;
-            UpdateTikTokButtons();
+            _galleryDownloading = false;
+            UpdateGalleryButtons();
         }
     }
 
