@@ -48,8 +48,15 @@ public sealed partial class MainWindow : Window
                 DispatcherQueue.TryEnqueue(() => ApplyTheme(AppSettingsService.Instance.Theme));
         };
 
+        // ── Popups (ComboBox drop-downs, flyouts) otherwise open with a stuck busy cursor ──
+        y2akio.Helpers.PopupCursorFix.Install();
+
         // ── Security: never leave the decrypted cookies.txt behind after the window closes ──
-        Closed += (_, _) => AppSettingsService.Instance.CleanupCookiesFile();
+        Closed += (_, _) =>
+        {
+            AppSettingsService.Instance.CleanupCookiesFile();
+            y2akio.Helpers.PopupCursorFix.Uninstall();
+        };
     }
 
     // ─── Theme helper ────────────────────────────────────────────────────────
