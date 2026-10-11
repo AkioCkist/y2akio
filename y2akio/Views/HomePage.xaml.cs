@@ -37,7 +37,7 @@ public sealed partial class HomePage : Page
     private bool _previewActive;       // instant card is shown but the full dump hasn't populated options yet
     private int _activeDownloads;      // so an analyze finish never re-enables DownloadNow mid-download
 
-    private readonly TikTokPhotoService _tikTok = new();
+    private readonly TikTokPhotoService _tikTok;
     private readonly FacebookStoryService _facebookStories = new();
     private readonly InstagramStoryService _instagramStories = new();
     private readonly FacebookPostService _facebookPosts = new();
@@ -67,6 +67,7 @@ public sealed partial class HomePage : Page
 
     public HomePage()
     {
+        _tikTok = new(_ytDlp.FetchPagesAsync);
         InitializeComponent();
 
         HistoryList.ItemsSource = _history;

@@ -158,19 +158,12 @@ public class FacebookPostService
             }
 
             // Album.
-            if (attachment.TryGetProperty("all_subattachments", out var subs) && subs.ValueKind == JsonValueKind.Object)
+            if (FindAlbumSubattachments(attachment) is var (count, subs))
             {
                 post.MediasetToken = FacebookStoryService.Str(attachment, "mediaset_token");
-                post.TotalCount = FacebookStoryService.Int(subs, "count");
-                if (subs.TryGetProperty("nodes", out var nodes) && nodes.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var node in nodes.EnumerateArray())
-                    {
-                        if (!node.TryGetProperty("media", out var media) || media.ValueKind != JsonValueKind.Object) continue;
-                        if (FacebookStoryService.ParseMedia(media, post.Items.Count + 1) is { } item)
-                            post.Items.Add((FacebookStoryService.Str(media, "id"), item));
-                    }
-                }
+                post.TotalCount = count;
+                foreach (var (mediaId, item) in ParseSubattachmentNodes(subs, post.Items.Count))
+                    post.Items.Add((mediaId, item));
             }
             // Single photo.
             else if (attachment.TryGetProperty("media", out var media) && media.ValueKind == JsonValueKind.Object
@@ -207,6 +200,47 @@ public class FacebookPostService
         if (string.IsNullOrEmpty(post.Id) && post.MediasetToken.StartsWith("pcb."))
             post.Id = post.MediasetToken["pcb.".Length..];
         return post;
+    }
+
+    /// <summary>
+    /// An album attachment's total photo count and the subattachments holding its embedded photos.
+    /// Classic layout: <c>all_subattachments</c> (count + nodes). Album-frame layout
+    /// (<c>StoryAttachmentAlbumFrameStyleRenderer</c>): <c>frame_sublayout_subattachments</c> has the
+    /// count but URL-less nodes, while the first photos with URLs sit in one of the per-grid variants
+    /// (<c>two_photos_subattachments</c> … <c>five_photos_subattachments</c>) — take the one that
+    /// yields the most parseable photos. Null when the attachment is not an album.
+    /// </summary>
+    private static (int Count, JsonElement Subs)? FindAlbumSubattachments(JsonElement attachment)
+    {
+        if (attachment.TryGetProperty("all_subattachments", out var all) && all.ValueKind == JsonValueKind.Object)
+            return (FacebookStoryService.Int(all, "count"), all);
+
+        if (!attachment.TryGetProperty("frame_sublayout_subattachments", out var frame) || frame.ValueKind != JsonValueKind.Object)
+            return null;
+
+        JsonElement best = frame;
+        var bestCount = ParseSubattachmentNodes(frame, 0).Count;
+        foreach (var prop in attachment.EnumerateObject())
+        {
+            if (!prop.Name.EndsWith("_subattachments", StringComparison.Ordinal) || prop.Value.ValueKind != JsonValueKind.Object) continue;
+            var parsed = ParseSubattachmentNodes(prop.Value, 0).Count;
+            if (parsed > bestCount) (best, bestCount) = (prop.Value, parsed);
+        }
+        return (FacebookStoryService.Int(frame, "count"), best);
+    }
+
+    private static List<(string MediaId, MediaGalleryItem Item)> ParseSubattachmentNodes(JsonElement subs, int startCount)
+    {
+        var items = new List<(string, MediaGalleryItem)>();
+        if (!subs.TryGetProperty("nodes", out var nodes) || nodes.ValueKind != JsonValueKind.Array) return items;
+
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (!node.TryGetProperty("media", out var media) || media.ValueKind != JsonValueKind.Object) continue;
+            if (FacebookStoryService.ParseMedia(media, startCount + items.Count + 1) is { } item)
+                items.Add((FacebookStoryService.Str(media, "id"), item));
+        }
+        return items;
     }
 
     // ─── Album page ──────────────────────────────────────────────────────────

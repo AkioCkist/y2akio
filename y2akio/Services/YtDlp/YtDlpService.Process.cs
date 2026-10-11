@@ -17,12 +17,13 @@ namespace y2akio.Services;
 public partial class YtDlpService
 {
     private async Task<(string stdout, string stderr, int exitCode)> RunProcessAsync(
-        string arguments, CancellationToken ct, Action<string>? onOutputLine = null)
+        string arguments, CancellationToken ct, Action<string>? onOutputLine = null, string? workingDirectory = null)
     {
         var psi = new ProcessStartInfo
         {
             FileName = _ytDlpPath,
             Arguments = arguments,
+            WorkingDirectory = workingDirectory ?? "",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,

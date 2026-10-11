@@ -30,6 +30,17 @@ public class TikTokPhotoService
 
     private static readonly Regex PostIdRegex = new(@"/(?:photo|video)/(\d+)", RegexOptions.Compiled);
 
+    private readonly Func<string, string?, CancellationToken, Task<IReadOnlyList<string>>>? _impersonatedFetch;
+
+    /// <param name="impersonatedFetch">
+    /// Fallback page fetcher with a browser TLS fingerprint (url, cookies.txt text → raw pages), used when
+    /// TikTok's WAF answers HttpClient with its bot-challenge page instead of the post. Null = HttpClient only.
+    /// </param>
+    public TikTokPhotoService(Func<string, string?, CancellationToken, Task<IReadOnlyList<string>>>? impersonatedFetch = null)
+    {
+        _impersonatedFetch = impersonatedFetch;
+    }
+
     /// <summary>True for a direct <c>tiktok.com/.../photo/&lt;id&gt;</c> link.</summary>
     public static bool IsPhotoUrl(string url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri)
@@ -89,6 +100,11 @@ public class TikTokPhotoService
             try
             {
                 var (html, _) = await MediaGalleryService.GetPageAsync(candidate, cookieHeader, ct);
+                if (IsBotChallenge(html) && _impersonatedFetch is not null)
+                {
+                    var pages = await _impersonatedFetch(candidate, cookiesText, ct);
+                    html = pages.FirstOrDefault(p => !IsBotChallenge(p)) ?? html;
+                }
                 var item = FindItemStruct(html);
                 if (item is null) continue;
 
@@ -107,6 +123,13 @@ public class TikTokPhotoService
     }
 
     // ─── Page parse ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// TikTok's WAF challenge: a ~1.5KB stub page (loading <c>waf-aiso/*.js</c>) with none of the page
+    /// data scripts, served instead of the post when the client's TLS fingerprint looks like a bot.
+    /// </summary>
+    private static bool IsBotChallenge(string html) =>
+        !RehydrationRegex.IsMatch(html) && !SigiRegex.IsMatch(html);
 
     /// <summary>
     /// Pulls the item object out of either page-data format TikTok has shipped
