@@ -96,6 +96,7 @@ public partial class YtDlpService
                 .Append("--dump-single-json --no-warnings ")
                 .Append(flat ? "--flat-playlist --playlist-items 1-500 " : "--no-playlist ")
                 .Append(FfmpegLocationArg())
+                .Append(JsRuntimeArg())
                 .Append(ImpersonateArg(url))
                 .Append(attemptArgs)
                 .Append($"\"{url}\"");

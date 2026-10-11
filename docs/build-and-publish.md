@@ -44,7 +44,8 @@ publish/
 ├── y2akio.exe
 ├── Assets/
 ├── bin/
-│   ├── yt-dlp.exe
+│   ├── yt-dlp/ (yt-dlp.exe + _internal/)
+│   ├── deno/deno.exe
 │   └── ffmpeg-9.0.1-full_build/bin/ffmpeg.exe
 ├── Microsoft.WindowsAppRuntime.Insights.Resource.dll
 └── runtime and application DLLs
@@ -77,7 +78,7 @@ For runtime-only XAML or resource failures, reproduce under the Visual Studio de
 ## Release checklist
 
 1. Restore and build from a clean checkout.
-2. Confirm the intended `yt-dlp` and FFmpeg files were copied.
+2. Confirm the intended `yt-dlp`, `deno` and FFmpeg files were copied.
 3. Publish with trimming disabled.
 4. Launch on a machine without a preinstalled Windows App Runtime when possible.
 5. Exercise navigation, one download, one FFmpeg operation, settings persistence, and a completion toast.

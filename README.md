@@ -44,7 +44,7 @@ Y2Akio does not download `yt-dlp` or FFmpeg automatically. Follow [Requirements 
 From the repository root:
 
 ```powershell
-# Put yt-dlp.exe and the extracted FFmpeg build under y2akio\bin first.
+# Put yt-dlp (onedir), deno and the extracted FFmpeg build under y2akio\bin first.
 dotnet restore .\y2akio.sln
 dotnet build .\y2akio.sln -c Debug -p:Platform=x64
 .\y2akio\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\y2akio.exe

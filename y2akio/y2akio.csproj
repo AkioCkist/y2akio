@@ -24,7 +24,15 @@
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>
 
-    <Content Include="bin\yt-dlp.exe">
+    <!-- yt-dlp onedir build (yt-dlp_win.zip): yt-dlp.exe + _internal\. Not the onefile yt-dlp.exe,
+         which unpacks itself to %TEMP% on every run and gets rescanned by antivirus on clean machines. -->
+    <Content Include="bin\yt-dlp\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+
+    <!-- deno: JS runtime yt-dlp needs to solve YouTube's challenges (passed via the js-runtimes option). -->
+    <Content Include="bin\deno\deno.exe">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>

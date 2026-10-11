@@ -83,6 +83,7 @@ public partial class YtDlpService
         var args = new StringBuilder();
         args.Append("--newline "); // one progress line per update, easier to parse
         args.Append(FfmpegLocationArg());
+        args.Append(JsRuntimeArg());
         args.Append(ImpersonateArg(req.Url));
         args.Append(attemptArgs);
         args.Append($"-o \"{outputTemplate}\" ");
@@ -239,5 +240,13 @@ public partial class YtDlpService
 
     private string FfmpegLocationArg() =>
         string.IsNullOrWhiteSpace(_ffmpegDirectory) ? "" : $"--ffmpeg-location \"{_ffmpegDirectory}\" ";
+
+    /// <summary>
+    /// Points yt-dlp at the bundled deno for YouTube's JS challenges. Without a JS runtime yt-dlp
+    /// falls back to degraded clients (missing formats, more bot checks, slower analyze), and it
+    /// only auto-detects deno on PATH — so a clean machine would silently run without one.
+    /// </summary>
+    private string JsRuntimeArg() =>
+        string.IsNullOrWhiteSpace(_denoPath) ? "" : $"--js-runtimes \"deno:{_denoPath}\" ";
 
 }

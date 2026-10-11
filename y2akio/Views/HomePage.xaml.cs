@@ -23,7 +23,8 @@ public sealed partial class HomePage : Page
 {
     private readonly YtDlpService _ytDlp = new(
         ytDlpPath: ResolveYtDlpPath(),
-        ffmpegDirectory: ResolveFfmpegDirectory());
+        ffmpegDirectory: ResolveFfmpegDirectory(),
+        denoPath: ExecutableLocator.Find("deno.exe", Path.Combine("bin", "deno"), "bin", "") ?? "");
     private readonly HistoryStore _historyStore = new();
     private readonly ObservableCollection<DownloadHistoryItem> _history = new();
 
@@ -46,12 +47,13 @@ public sealed partial class HomePage : Page
     private bool _galleryDownloading;
 
     /// <summary>
-    /// Looks for yt-dlp.exe next to the running app first (so it works after you publish/copy
-    /// the app elsewhere), then falls back to the known dev-machine bin folder, then finally
-    /// just "yt-dlp.exe" so it still works if it's on PATH.
+    /// Looks for the bundled yt-dlp first (so it works after you publish/copy the app elsewhere),
+    /// then PATH, then finally just "yt-dlp.exe". The bundle is the onedir build (bin\yt-dlp\ with
+    /// _internal\): the onefile exe re-extracts ~40MB to %TEMP% on every run, which antivirus
+    /// rescans each time on machines that haven't seen it — analyze took ages there.
     /// </summary>
     private static string ResolveYtDlpPath()
-        => ExecutableLocator.Find("yt-dlp.exe", "bin", "") ?? "yt-dlp.exe";
+        => ExecutableLocator.Find("yt-dlp.exe", Path.Combine("bin", "yt-dlp"), "bin", "") ?? "yt-dlp.exe";
 
     private static string ResolveFfmpegDirectory()
     {

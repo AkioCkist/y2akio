@@ -7,7 +7,7 @@ Install:
 - Windows 10 1809+ or Windows 11.
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
 - Visual Studio 2022 with .NET desktop development and Windows App SDK tooling, if using the IDE.
-- `yt-dlp.exe` and a full FFmpeg build.
+- `yt-dlp` (onedir `yt-dlp_win.zip`), `deno.exe` and a full FFmpeg build.
 
 Confirm the SDK:
 
@@ -20,7 +20,8 @@ dotnet --info
 Follow [Requirements and setup](requirements-and-setup.md). The required source-tree paths are:
 
 ```text
-y2akio\bin\yt-dlp.exe
+y2akio\bin\yt-dlp\yt-dlp.exe
+y2akio\bin\deno\deno.exe
 y2akio\bin\ffmpeg-9.0.1-full_build\bin\ffmpeg.exe
 ```
 

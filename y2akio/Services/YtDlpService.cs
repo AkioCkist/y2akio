@@ -15,18 +15,20 @@ namespace y2akio.Services;
 
 public partial class YtDlpService
 {
-    // Adjust these if yt-dlp.exe / ffmpeg.exe aren't on PATH. Ship them next to the app
+    // Adjust these if yt-dlp.exe / ffmpeg.exe / deno.exe aren't on PATH. Ship them next to the app
     // (e.g. in a "bin" subfolder) and point these at that folder for a self-contained install.
     private readonly string _ytDlpPath;
     private readonly string _ffmpegDirectory;
+    private readonly string _denoPath;
 
     // Shared client for the cheap oEmbed metadata call (never spawns yt-dlp).
     private static readonly HttpClient _http = new();
 
-    public YtDlpService(string ytDlpPath = "yt-dlp.exe", string ffmpegDirectory = "")
+    public YtDlpService(string ytDlpPath = "yt-dlp.exe", string ffmpegDirectory = "", string denoPath = "")
     {
         _ytDlpPath = ytDlpPath;
         _ffmpegDirectory = ffmpegDirectory;
+        _denoPath = denoPath;
     }
 
 }
