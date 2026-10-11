@@ -25,7 +25,7 @@ internal static class ShortcutHelper
         try
         {
             link.SetPath(targetPath);
-            link.SetWorkingDirectory(System.IO.Path.GetDirectoryName(targetPath));
+            link.SetWorkingDirectory(System.IO.Path.GetDirectoryName(targetPath) ?? "");
             link.SetIconLocation(targetPath, 0);
 
             // Set System.AppUserModel.ID on the .lnk so the shell associates toasts with us.

@@ -1,10 +1,10 @@
 {
   "profiles": {
-    "y2akio (Package)": {
-      "commandName": "MsixPackage"
-    },
     "y2akio (Unpackaged)": {
       "commandName": "Project"
+    },
+    "y2akio (Package)": {
+      "commandName": "MsixPackage"
     }
   }
 }

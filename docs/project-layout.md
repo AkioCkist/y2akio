@@ -4,8 +4,9 @@
 y2akio.sln
 y2akio/
 ├── App.xaml(.cs)          Application startup and shared main window
-├── Views/                 WinUI pages, XAML, and page interaction logic
+├── Views/                 WinUI pages plus feature-focused code-behind partials
 ├── Services/              Processes, persistence, security, media operations
+│   └── YtDlp/             yt-dlp contracts and focused service partials
 ├── Models/                Parsed and displayed data structures
 ├── Helpers/               Small UI helpers
 ├── Assets/                Icons, logos, and images
@@ -20,16 +21,19 @@ y2akio/
 | Path | Responsibility |
 |---|---|
 | `Views/MainWindow.xaml(.cs)` | Window shell, navigation, theme application, picker owner, shutdown cleanup |
-| `Views/HomePage.xaml(.cs)` | Downloader, playlist, TikTok photos, options, progress, logs, and history |
+| `Views/HomePage.xaml(.cs)` | Downloader composition, startup state, localization, and analyze orchestration |
+| `Views/HomePage.*.cs` | Feature-focused partials for playlist, gallery, options, presentation, and history |
 | `Views/ImageResizePage.xaml(.cs)` | Resize inputs, preview, output selection, and result reporting |
-| `Views/MediaCompressPage.xaml(.cs)` | Drag/drop, preview, FFmpeg compression, GPU selection, cancellation, and logs |
+| `Views/MediaCompressPage.xaml(.cs)` | Compression-page composition, drag/drop, and preview |
+| `Views/MediaCompressPage.*.cs` | Focused partials for workflow, FFmpeg execution, and control helpers |
 | `Views/SettingsPage.xaml(.cs)` | Language, theme, save folders, and encrypted cookie import/delete |
 
 ## Services
 
 | Path | Responsibility |
 |---|---|
-| `Services/YtDlpService.cs` | URL analysis, `yt-dlp` arguments/processes, progress parsing, retries, transcoding options, cleanup |
+| `Services/YtDlpService.cs` | `yt-dlp` service composition and executable configuration |
+| `Services/YtDlp/` | Contracts plus focused analysis, download, and child-process partials |
 | `Services/TikTokPhotoService.cs` | TikTok short-link resolution, post parsing, and image downloads |
 | `Services/ImageResizeService.cs` | Windows Imaging Component decode, scale, and encode pipeline |
 | `Services/AppSettingsService.cs` | Settings persistence and temporary cookie-file lifecycle |
