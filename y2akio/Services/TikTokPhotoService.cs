@@ -78,7 +78,11 @@ public class TikTokPhotoService
         var candidates = new List<string> { $"https://www.tiktok.com/@{user}/video/{postId}" };
         if (!candidates.Contains(url)) candidates.Add(url);
 
-        string lastError = "TikTok returned no data for this post (it may be private, deleted, or region-locked).";
+        // Private / friends-only posts only render for a logged-in viewer who is allowed to see them.
+        var loggedIn = cookieHeader.Contains("sessionid=");
+        string lastError = loggedIn
+            ? "TikTok returned no data for this post. It may be deleted, region-locked, or private / friends-only and not visible to the account in your imported cookies."
+            : "TikTok returned no data for this post. If it's private or friends-only, import your browser's cookies.txt (with a logged-in TikTok session that can see it) in Settings.";
         foreach (var candidate in candidates)
         {
             ct.ThrowIfCancellationRequested();
@@ -95,7 +99,7 @@ public class TikTokPhotoService
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                lastError = ex.Message;
+                lastError = ex is TikTokStatusException status ? status.Describe(loggedIn) : ex.Message;
             }
         }
 
@@ -126,8 +130,7 @@ public class TikTokPhotoService
                 && code.ValueKind == JsonValueKind.Number && code.GetInt32() != 0)
             {
                 var msg = detail.TryGetProperty("statusMsg", out var m) ? m.GetString() : null;
-                throw new InvalidOperationException(
-                    $"TikTok refused the request (status {code.GetInt32()}{(string.IsNullOrWhiteSpace(msg) ? "" : $": {msg}")}).");
+                throw new TikTokStatusException(code.GetInt32(), msg);
             }
         }
         return null;
@@ -230,4 +233,32 @@ public class TikTokPhotoService
         var m = Regex.Match(url, @"/@([^/?#]+)");
         return m.Success ? Uri.UnescapeDataString(m.Groups[1].Value) : "tiktok";
     }
+}
+
+/// <summary>TikTok's own non-zero <c>statusCode</c> for an item (private, deleted, ...), turned into a readable message.</summary>
+internal sealed class TikTokStatusException : Exception
+{
+    public int Code { get; }
+    public string? StatusMessage { get; }
+
+    public TikTokStatusException(int code, string? statusMessage)
+        : base($"TikTok refused the request (status {code}{(string.IsNullOrWhiteSpace(statusMessage) ? "" : $": {statusMessage}")}).")
+    {
+        Code = code;
+        StatusMessage = statusMessage;
+    }
+
+    /// <summary>
+    /// Readable explanation. 10216/10222 are TikTok's "private / no permission" codes, 10204 is
+    /// "item doesn't exist"; anything else keeps the raw status.
+    /// </summary>
+    public string Describe(bool loggedIn) => Code switch
+    {
+        10216 or 10222 when loggedIn =>
+            "This TikTok post is private or friends-only, and the account in your imported cookies isn't allowed to see it.",
+        10216 or 10222 =>
+            "This TikTok post is private or friends-only. Import your browser's cookies.txt (with a logged-in TikTok session that can see it) in Settings.",
+        10204 => "This TikTok post doesn't exist anymore (deleted, or the link is wrong).",
+        _ => Message,
+    };
 }
