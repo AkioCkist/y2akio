@@ -78,15 +78,20 @@ public sealed partial class MainWindow : Window
 
         if (args.InvokedItemContainer?.Tag is not string tag) return;
 
-        if (tag == "home")
+        switch (tag)
         {
-            if (ContentFrame.CurrentSourcePageType != typeof(HomePage))
-                ContentFrame.Navigate(typeof(HomePage));
-        }
-        else if (tag == "imageResize")
-        {
-            if (ContentFrame.CurrentSourcePageType != typeof(ImageResizePage))
-                ContentFrame.Navigate(typeof(ImageResizePage));
+            case "home":
+                if (ContentFrame.CurrentSourcePageType != typeof(HomePage))
+                    ContentFrame.Navigate(typeof(HomePage));
+                break;
+            case "imageResize":
+                if (ContentFrame.CurrentSourcePageType != typeof(ImageResizePage))
+                    ContentFrame.Navigate(typeof(ImageResizePage));
+                break;
+            case "compress":
+                if (ContentFrame.CurrentSourcePageType != typeof(MediaCompressPage))
+                    ContentFrame.Navigate(typeof(MediaCompressPage));
+                break;
         }
     }
 }

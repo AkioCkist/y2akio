@@ -2,7 +2,7 @@ using System;
 
 namespace y2akio.Models;
 
-public enum MediaKind { Video, Audio }
+public enum MediaKind { Video, Audio, Image }
 
 /// <summary>One row in the "Download History" list.</summary>
 public class DownloadHistoryItem
@@ -15,6 +15,11 @@ public class DownloadHistoryItem
     public DateTime CompletedAt { get; set; } = DateTime.Now;
 
     // Convenience strings for binding directly in XAML
-    public string KindGlyph => Kind == MediaKind.Video ? "\uE714" : "\uE8D6"; // Segoe Fluent Icons: video / music note
-    public string Subtitle => $"{(Kind == MediaKind.Video ? "Video" : "Audio")} · {QualityLabel} · Saved in: {FolderPath} · {CompletedAt:HH:mm:ss d/M/yyyy}";
+    public string KindGlyph => Kind switch // Segoe Fluent Icons: video / music note / photo
+    {
+        MediaKind.Video => "\uE714",
+        MediaKind.Audio => "\uE8D6",
+        _               => "\uEB9F",
+    };
+    public string Subtitle => $"{Kind}· {QualityLabel} · Saved in: {FolderPath} · {CompletedAt:HH:mm:ss d/M/yyyy}";
 }

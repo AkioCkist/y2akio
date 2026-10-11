@@ -38,12 +38,20 @@
 
 
             <NavigationView.MenuItems>
+
                 <NavigationViewItem x:Name="NavHomeItem" Content="Home" Icon="Home" Tag="home" IsSelected="True" />
                 <NavigationViewItem Content="Image Resize" Tag="imageResize">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE7C3;" FontFamily="Segoe Fluent Icons" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
+
+                <NavigationViewItem Content="Compress" Tag="compress">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE74A;" FontFamily="Segoe Fluent Icons" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
             </NavigationView.MenuItems>
 
             <Frame x:Name="ContentFrame" />

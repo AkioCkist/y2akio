@@ -35,6 +35,11 @@ public sealed partial class HomePage : Page
     private bool _previewActive;       // instant card is shown but the full dump hasn't populated options yet
     private int _activeDownloads;      // so an analyze finish never re-enables DownloadNow mid-download
 
+    private readonly TikTokPhotoService _tikTok = new();
+    private TikTokPhotoPost? _currentTikTokPost;
+    private CancellationTokenSource? _tikTokLoadCts; // cancels gallery loading when another post replaces it
+    private bool _tikTokDownloading;
+
     /// <summary>
     /// Looks for yt-dlp.exe next to the running app first (so it works after you publish/copy
     /// the app elsewhere), then falls back to the known dev-machine bin folder, then finally
@@ -197,6 +202,16 @@ public sealed partial class HomePage : Page
 
         // Playlist button
         UpdateDownloadPlaylistButton();
+
+        // TikTok photo gallery
+        TikTokSelectAllButton.Content    = L("Home.SelectAll");
+        TikTokDeselectAllButton.Content  = L("Home.DeselectAll");
+        TikTokGalleryHint.Text           = L("Home.TikTokGalleryHint");
+        ToolTipService.SetToolTip(ChooseTikTokFolderButton, L("Home.TikTokSaveLocation"));
+        ToolTipService.SetToolTip(TikTokSaveModeComboBox, L("Home.TikTokSaveAs"));
+        TikTokSaveFolderItem.Content     = L("Home.TikTokSaveFolder");
+        TikTokSaveZipItem.Content        = L("Home.TikTokSaveZip");
+        UpdateTikTokButtons();
     }
 
     private static string L(string key) => LocalizationService.Get(key);
@@ -230,12 +245,20 @@ public sealed partial class HomePage : Page
         ErrorBar.IsOpen = false;
         OptionsPanel.Visibility = Visibility.Collapsed;
         PlaylistPanel.Visibility = Visibility.Collapsed;
+        if (!_tikTokDownloading) TikTokPhotoPanel.Visibility = Visibility.Collapsed;
         AnalyzingRing.IsActive = true;
         AnalyzeButton.IsEnabled = false;
 
         string cookiesPath = "";
         try
         {
+            // TikTok photo posts never reach yt-dlp (it only extracts their audio) — they get the gallery instead.
+            if (await TryResolveTikTokPhotoUrlAsync(url) is { } photoUrl)
+            {
+                await AnalyzeTikTokPhotoAsync(photoUrl);
+                return;
+            }
+
             cookiesPath = await AppSettingsService.Instance.GetCookiesFilePathAsync();
 
             if (YtDlpService.LooksLikeSingleVideoUrl(url))
@@ -405,6 +428,245 @@ public sealed partial class HomePage : Page
             if (!string.IsNullOrEmpty(cookiesPath)) AppSettingsService.Instance.CleanupCookiesFile();
             _activeDownloads--;
             DownloadPlaylistButton.IsEnabled = true;
+        }
+    }
+
+    // ─── TikTok photo posts ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the URL to scrape when the link is a TikTok photo post, else null. Share short links
+    /// (vt./vm.tiktok.com) only reveal whether they point at a photo post after their redirect resolves.
+    /// </summary>
+    private async Task<string?> TryResolveTikTokPhotoUrlAsync(string url)
+    {
+        if (TikTokPhotoService.IsPhotoUrl(url)) return url;
+        if (!TikTokPhotoService.IsShortLink(url)) return null;
+
+        var resolved = await _tikTok.ResolveShortLinkAsync(url);
+        return TikTokPhotoService.IsPhotoUrl(resolved) ? resolved : null;
+    }
+
+    private async Task AnalyzeTikTokPhotoAsync(string url)
+    {
+        if (_tikTokDownloading)
+            throw new InvalidOperationException(L("Home.TikTokBusy"));
+
+        // Cookies are decrypted in memory only — this path never needs the plaintext cookies.txt on disk.
+        var cookiesText = await AppSettingsService.Instance.DecryptCookiesAsync();
+        var post = await _tikTok.FetchPostAsync(url, cookiesText);
+        ShowTikTokPost(post);
+    }
+
+    private void ShowTikTokPost(TikTokPhotoPost post)
+    {
+        _tikTokLoadCts?.Cancel();
+        _tikTokLoadCts = new CancellationTokenSource();
+
+        _currentTikTokPost = post;
+        TikTokPostTitleText.Text = string.IsNullOrWhiteSpace(post.Title) ? $"@{post.Author}" : post.Title.Trim();
+        var meta = new List<string> { string.Format(L("Home.TikTokPhotoCount"), post.Images.Count), $"@{post.Author}" };
+        if (!string.IsNullOrWhiteSpace(post.Nickname)) meta.Add(post.Nickname);
+        TikTokPostMetaText.Text = string.Join(" · ", meta);
+
+        if (string.IsNullOrWhiteSpace(TikTokSaveLocationText.Text))
+            TikTokSaveLocationText.Text = AppSettingsService.Instance.VideoSaveFolder;
+
+        TikTokPhotoGrid.ItemsSource = post.Images;
+        TikTokProgressPanel.Visibility = Visibility.Collapsed;
+        UpdateTikTokButtons();
+        TikTokPhotoPanel.Visibility = Visibility.Visible;
+
+        _ = LoadTikTokThumbnailsAsync(post, _tikTokLoadCts.Token);
+    }
+
+    /// <summary>
+    /// Fetches every photo once (4 at a time) and paints its gallery tile. The bytes are kept on the
+    /// item so saving later is instant and never hits the CDN twice. Runs on the UI context, so the
+    /// item property updates are safe.
+    /// </summary>
+    private async Task LoadTikTokThumbnailsAsync(TikTokPhotoPost post, CancellationToken ct)
+    {
+        using var gate = new SemaphoreSlim(4);
+        var tasks = post.Images.Select(async image =>
+        {
+            await gate.WaitAsync(ct);
+            try
+            {
+                image.Bytes ??= await _tikTok.DownloadImageAsync(image, ct);
+                image.Thumbnail = await CreateBitmapAsync(image.Bytes, decodeWidth: 344);
+            }
+            catch (OperationCanceledException) { /* a newer analyze replaced this post */ }
+            catch
+            {
+                image.Failed = true; // HEIC without the codec, or the CDN refused — the save step retries the fetch
+            }
+            finally
+            {
+                gate.Release();
+            }
+        });
+
+        try { await Task.WhenAll(tasks); }
+        catch (OperationCanceledException) { /* ignore */ }
+    }
+
+    private static async Task<BitmapImage> CreateBitmapAsync(byte[] bytes, int decodeWidth = 0)
+    {
+        var bitmap = new BitmapImage();
+        if (decodeWidth > 0) bitmap.DecodePixelWidth = decodeWidth; // keep gallery tiles light on memory
+        using var stream = new MemoryStream(bytes).AsRandomAccessStream();
+        await bitmap.SetSourceAsync(stream);
+        return bitmap;
+    }
+
+    private void TikTokPhotoGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateTikTokButtons();
+
+    private void TikTokSelectAllButton_Click(object sender, RoutedEventArgs e) => TikTokPhotoGrid.SelectAll();
+
+    private void TikTokDeselectAllButton_Click(object sender, RoutedEventArgs e) => TikTokPhotoGrid.SelectedItems.Clear();
+
+    private void UpdateTikTokButtons()
+    {
+        var total = _currentTikTokPost?.Images.Count ?? 0;
+        var selected = TikTokPhotoGrid.SelectedItems.Count;
+
+        var selectedText = L("Home.DownloadSelected");
+        TikTokDownloadSelectedButton.Content = selected > 0 ? $"{selectedText} ({selected})" : selectedText;
+        TikTokDownloadAllButton.Content = $"{L("Home.TikTokDownloadAll")} ({total})";
+
+        TikTokDownloadSelectedButton.IsEnabled = selected > 0 && !_tikTokDownloading;
+        TikTokDownloadAllButton.IsEnabled = total > 0 && !_tikTokDownloading;
+    }
+
+    /// <summary>Double-click a tile: show the photo full size in a dialog.</summary>
+    private async void TikTokPhotoGrid_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is not TikTokPhotoItem { Bytes: { } bytes } image)
+            return;
+
+        BitmapImage bitmap;
+        try { bitmap = await CreateBitmapAsync(bytes); }
+        catch { return; }
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = $"{image.Index} / {_currentTikTokPost?.Images.Count ?? 0}",
+            CloseButtonText = L("Settings.Ok"),
+            Content = new ScrollViewer
+            {
+                MaxHeight = 640,
+                ZoomMode = ZoomMode.Enabled,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = new Image { Source = bitmap, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, MaxHeight = 620 },
+            },
+        };
+        await dialog.ShowAsync();
+    }
+
+    private async void ChooseTikTokFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        var folder = await PickFolderAsync();
+        if (folder != null)
+            TikTokSaveLocationText.Text = folder.Path;
+    }
+
+    private void TikTokDownloadSelectedButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Keep post order regardless of the order the user clicked tiles in.
+        var selected = TikTokPhotoGrid.SelectedItems.OfType<TikTokPhotoItem>().OrderBy(i => i.Index).ToList();
+        _ = SaveTikTokPhotosAsync(selected);
+    }
+
+    private void TikTokDownloadAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentTikTokPost is { } post)
+            _ = SaveTikTokPhotosAsync(post.Images);
+    }
+
+    /// <summary>
+    /// Saves the given photos as loose files in a per-post subfolder (<c>author_postId\</c>) or as one
+    /// <c>author_postId.zip</c>, depending on the "Save as" choice. Photos the gallery couldn't fetch
+    /// yet are downloaded first.
+    /// </summary>
+    private async Task SaveTikTokPhotosAsync(IReadOnlyList<TikTokPhotoItem> images)
+    {
+        if (_currentTikTokPost is not { } post || images.Count == 0 || _tikTokDownloading) return;
+
+        var saveFolder = TikTokSaveLocationText.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(saveFolder)) saveFolder = AppSettingsService.Instance.VideoSaveFolder;
+        var asZip = TikTokSaveModeComboBox.SelectedIndex == 1;
+
+        _tikTokDownloading = true;
+        UpdateTikTokButtons();
+        ErrorBar.IsOpen = false;
+        SuccessBar.IsOpen = false;
+        TikTokProgressBar.Value = 0;
+        TikTokProgressPanel.Visibility = Visibility.Visible;
+        ShowLogPanel();
+        AppendLog($"TikTok photo post {post.Id} by @{post.Author}: saving {images.Count} photo(s){(asZip ? " as ZIP" : "")}");
+
+        try
+        {
+            var done = 0;
+            foreach (var image in images)
+            {
+                if (image.Bytes is null)
+                {
+                    TikTokStatusText.Text = string.Format(L("Home.TikTokFetching"), image.Index);
+                    image.Bytes = await _tikTok.DownloadImageAsync(image);
+                }
+                done++;
+                TikTokProgressBar.Value = done * 90.0 / images.Count; // last 10% = writing to disk
+            }
+
+            TikTokStatusText.Text = L("Home.TikTokWriting");
+            var baseName = TikTokPhotoService.BaseNameFor(post);
+            string resultPath;
+            string folderPath;
+            if (asZip)
+            {
+                resultPath = await TikTokPhotoService.SaveAsZipAsync(post, images, Path.Combine(saveFolder, baseName + ".zip"));
+                folderPath = saveFolder;
+            }
+            else
+            {
+                folderPath = Path.Combine(saveFolder, baseName);
+                var written = await TikTokPhotoService.SaveToFolderAsync(post, images, folderPath);
+                resultPath = written[0];
+            }
+
+            TikTokProgressBar.Value = 100;
+            TikTokStatusText.Text = L("Home.TikTokDone");
+            var savedTarget = asZip ? resultPath : folderPath;
+            AppendLog($"Saved: {savedTarget}");
+
+            var title = string.IsNullOrWhiteSpace(post.Title) ? $"@{post.Author} · {post.Id}" : post.Title.Trim();
+            ToastService.ShowDownloadComplete(title, resultPath);
+            ShowDownloadComplete(string.Format(L("Home.TikTokSaved"), images.Count, savedTarget));
+
+            _history.Insert(0, new DownloadHistoryItem
+            {
+                Title = title,
+                Kind = MediaKind.Image,
+                QualityLabel = asZip ? $"ZIP · {images.Count} photos" : $"{images.Count} photos",
+                FilePath = resultPath,
+                FolderPath = folderPath,
+                CompletedAt = DateTime.Now,
+            });
+            await _historyStore.SaveAsync(_history);
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"ERROR: {ex.Message}");
+            TikTokStatusText.Text = ex.Message;
+            ErrorBar.Message = ex.Message;
+            ErrorBar.IsOpen = true;
+        }
+        finally
+        {
+            _tikTokDownloading = false;
+            UpdateTikTokButtons();
         }
     }
 

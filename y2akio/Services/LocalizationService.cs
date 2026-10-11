@@ -85,6 +85,18 @@ public static class LocalizationService
         ["Home.DownloadHistory"]   = D("Download History",  "Lịch sử tải xuống"),
         ["Home.ClearAll"]          = D("Clear All",         "Xóa tất cả"),
         ["Home.DownloadSelected"]  = D("Download Selected", "Tải các mục đã chọn"),
+        ["Home.TikTokPhotoCount"]  = D("{0} photos",        "{0} ảnh"),
+        ["Home.TikTokGalleryHint"] = D("Click photos to select them · double-click to view full size", "Nhấn vào ảnh để chọn · nhấn đúp để xem kích thước đầy đủ"),
+        ["Home.TikTokSaveLocation"]= D("Photo Save Location", "Thư mục lưu ảnh"),
+        ["Home.TikTokSaveAs"]      = D("Save as",           "Lưu dạng"),
+        ["Home.TikTokSaveFolder"]  = D("Images in a folder","Ảnh trong thư mục"),
+        ["Home.TikTokSaveZip"]     = D("One ZIP file",      "Một file ZIP"),
+        ["Home.TikTokDownloadAll"] = D("Download All",      "Tải tất cả"),
+        ["Home.TikTokFetching"]    = D("Downloading photo {0}...", "Đang tải ảnh {0}..."),
+        ["Home.TikTokWriting"]     = D("Saving...",         "Đang lưu..."),
+        ["Home.TikTokDone"]        = D("Done",              "Hoàn tất"),
+        ["Home.TikTokSaved"]       = D("{0} photo(s) saved to {1}", "Đã lưu {0} ảnh vào {1}"),
+        ["Home.TikTokBusy"]        = D("Wait for the current photo download to finish.", "Vui lòng đợi tải ảnh hiện tại hoàn tất."),
 
         // ── SettingsPage ──
         ["Settings.Title"]            = D("Settings",            "Cài đặt"),

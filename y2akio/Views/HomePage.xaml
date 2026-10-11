@@ -358,6 +358,128 @@
                 </Border>
             </StackPanel>
 
+            <!-- TikTok photo post gallery -->
+            <Grid x:Name="TikTokPhotoPanel" Visibility="Collapsed" RowSpacing="16" Padding="20"
+                  CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Header: post info + selection shortcuts -->
+                <Grid Grid.Row="0" ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="40" Height="40" CornerRadius="8"
+                            Background="#33F25EE7" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons" FontSize="18" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock x:Name="TikTokPostTitleText" FontSize="18" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" MaxLines="1" />
+                        <TextBlock x:Name="TikTokPostMetaText" Opacity="0.6" FontSize="12" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <Button x:Name="TikTokSelectAllButton" Content="Select all" FontSize="12"
+                                Click="TikTokSelectAllButton_Click" />
+                        <Button x:Name="TikTokDeselectAllButton" Content="Deselect all" FontSize="12"
+                                Click="TikTokDeselectAllButton_Click" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- Gallery: click a photo to (de)select it, double-click to view it full size -->
+                <StackPanel Grid.Row="1" Spacing="6">
+                    <TextBlock x:Name="TikTokGalleryHint" Opacity="0.6" FontSize="12"
+                               Text="Click photos to select them · double-click to view full size" />
+                    <Border CornerRadius="8" Padding="4"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                        <GridView x:Name="TikTokPhotoGrid"
+                                  MaxHeight="560"
+                                  SelectionMode="Multiple"
+                                  IsMultiSelectCheckBoxEnabled="True"
+                                  SelectionChanged="TikTokPhotoGrid_SelectionChanged"
+                                  DoubleTapped="TikTokPhotoGrid_DoubleTapped">
+                            <GridView.ItemTemplate>
+                                <DataTemplate x:DataType="models:TikTokPhotoItem">
+                                    <Grid Width="172" Height="230" CornerRadius="6"
+                                          Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                        <ProgressRing Width="24" Height="24" IsActive="True"
+                                                      Visibility="{x:Bind LoadingVisibility, Mode=OneWay}" />
+                                        <FontIcon Glyph="&#xE783;" FontFamily="Segoe Fluent Icons" FontSize="22" Opacity="0.5"
+                                                  Visibility="{x:Bind FailedVisibility, Mode=OneWay}" />
+                                        <Image Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="UniformToFill" />
+                                        <Border VerticalAlignment="Bottom" HorizontalAlignment="Left"
+                                                Background="#AA000000" CornerRadius="4" Padding="6,2" Margin="6">
+                                            <TextBlock Text="{x:Bind IndexDisplay}" Foreground="White" FontSize="12" FontWeight="SemiBold" />
+                                        </Border>
+                                        <Border VerticalAlignment="Bottom" HorizontalAlignment="Right"
+                                                Background="#AA000000" CornerRadius="4" Padding="6,2" Margin="6">
+                                            <TextBlock Text="{x:Bind SizeDisplay}" Foreground="White" FontSize="11" />
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </GridView.ItemTemplate>
+                        </GridView>
+                    </Border>
+                </StackPanel>
+
+                <!-- Footer toolbar: destination on the left, format + actions on the right -->
+                <StackPanel Grid.Row="2" Spacing="14">
+                    <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Destination: click to change -->
+                        <Button x:Name="ChooseTikTokFolderButton" Grid.Column="0" Height="36" Padding="10,0"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                Background="Transparent" BorderThickness="0"
+                                Click="ChooseTikTokFolderButton_Click">
+                            <Grid ColumnSpacing="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Grid.Column="0" Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="16" Opacity="0.8" />
+                                <TextBlock x:Name="TikTokSaveLocationText" Grid.Column="1" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" Opacity="0.8" />
+                            </Grid>
+                        </Button>
+
+                        <ComboBox x:Name="TikTokSaveModeComboBox" Grid.Column="1" Height="36" MinWidth="170"
+                                  SelectedIndex="0" VerticalAlignment="Center">
+                            <ComboBoxItem x:Name="TikTokSaveFolderItem" Content="Images in a folder" />
+                            <ComboBoxItem x:Name="TikTokSaveZipItem" Content="One ZIP file" />
+                        </ComboBox>
+
+                        <Button x:Name="TikTokDownloadAllButton" Grid.Column="2" Content="Download All"
+                                Height="36" MinWidth="130" Padding="16,0"
+                                Click="TikTokDownloadAllButton_Click" />
+
+                        <Button x:Name="TikTokDownloadSelectedButton" Grid.Column="3" Content="Download Selected"
+                                Height="36" MinWidth="170" Padding="16,0"
+                                Style="{StaticResource PrimaryActionButtonStyle}"
+                                Click="TikTokDownloadSelectedButton_Click" />
+                    </Grid>
+
+                    <StackPanel x:Name="TikTokProgressPanel" Spacing="6" Visibility="Collapsed">
+                        <ProgressBar x:Name="TikTokProgressBar" Minimum="0" Maximum="100"
+                                     Foreground="{ThemeResource PrimaryActionButtonBackground}" />
+                        <TextBlock x:Name="TikTokStatusText" Opacity="0.6" FontSize="12" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+
             <!-- Download log -->
             <StackPanel x:Name="LogPanel" Visibility="Collapsed" Spacing="10">
                 <Grid>
