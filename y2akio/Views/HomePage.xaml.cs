@@ -42,6 +42,7 @@ public sealed partial class HomePage : Page
     private readonly InstagramStoryService _instagramStories = new();
     private readonly FacebookPostService _facebookPosts = new();
     private readonly InstagramPostService _instagramPosts = new();
+    private readonly XPostService _xPosts = new();
     private MediaGalleryPost? _currentGalleryPost;
     private CancellationTokenSource? _galleryLoadCts; // cancels thumbnail loading when another post replaces it
     private bool _galleryDownloading;

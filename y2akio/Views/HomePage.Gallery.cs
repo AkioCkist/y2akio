@@ -27,6 +27,7 @@ public sealed partial class HomePage : Page
         else if (FacebookPostService.IsPostUrl(url)) fetch = c => _facebookPosts.FetchPostAsync(url, c); // null = video post → yt-dlp
         else if (InstagramStoryService.IsStoryUrl(url)) fetch = async c => await _instagramStories.FetchStoryAsync(url, c);
         else if (InstagramPostService.IsPostUrl(url)) fetch = async c => await _instagramPosts.FetchPostAsync(url, c);
+        else if (XPostService.IsPostUrl(url)) fetch = c => _xPosts.FetchPostAsync(url, c); // null = video-only post → yt-dlp
         else if (TikTokPhotoService.IsPhotoUrl(url)) fetch = async c => await _tikTok.FetchPostAsync(url, c);
         else if (TikTokPhotoService.IsShortLink(url))
         {
