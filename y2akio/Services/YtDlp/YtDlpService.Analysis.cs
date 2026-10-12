@@ -216,6 +216,10 @@ public partial class YtDlpService
         && (uri.Host.EndsWith("facebook.com", StringComparison.OrdinalIgnoreCase)
             || uri.Host.EndsWith("fb.watch", StringComparison.OrdinalIgnoreCase));
 
+    private static bool IsInstagramUrl(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && uri.Host.EndsWith("instagram.com", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// yt-dlp's facebook extractor does not recognize `/stories/<id>/<token>/` URLs at all
     /// ("Unsupported URL"), even with valid cookies. But the story ID is the video ID, and the

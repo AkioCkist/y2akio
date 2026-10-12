@@ -31,6 +31,7 @@ public partial class YtDlpService
         var destinationRegex = new Regex(@"Destination:\s*(.+)$", RegexOptions.Compiled);
         var mergeRegex = new Regex(@"Merging formats into\s*""(.+)""", RegexOptions.Compiled);
         var progressRegex = new Regex(@"\[download\]\s+([\d.]+)%", RegexOptions.Compiled);
+        var alreadyRegex = new Regex(@"\[download\]\s+(.+?) has already been downloaded", RegexOptions.Compiled);
 
         // Files present before this download, so cleanup only touches what this run created.
         var priorFiles = SnapshotFileNames(req.SaveFolder);
@@ -51,6 +52,10 @@ public partial class YtDlpService
 
             var mMatch = mergeRegex.Match(line);
             if (mMatch.Success) resolvedPath = mMatch.Groups[1].Value.Trim();
+
+            // yt-dlp skipped the download because the target file exists — that file is the result.
+            var aMatch = alreadyRegex.Match(line);
+            if (aMatch.Success) resolvedPath = aMatch.Groups[1].Value.Trim();
         }
 
         // Same fallback chain as analyze (YouTube Android client / Facebook anonymous-then-cookies).
@@ -231,8 +236,12 @@ public partial class YtDlpService
         var parts = new System.Collections.Generic.List<string>();
         if (req.PrefixDateTime) parts.Add(DateTime.Now.ToString("yyyyMMdd_HHmmss"));
         if (req.PrefixChannel) parts.Add("%(uploader)s");
-        if (req.IncludeTitle) parts.Add("%(title)s");
-        if (parts.Count == 0) parts.Add("%(title)s");
+        // Facebook / Instagram titles are often generic ("Facebook", "Video by …"), so two different
+        // videos would map to the same file name — yt-dlp then reports "has already been downloaded",
+        // skips the new video and the post-processors rewrite the OLD file. The id keeps names unique.
+        var title = IsFacebookUrl(req.Url) || IsInstagramUrl(req.Url) ? "%(title)s [%(id)s]" : "%(title)s";
+        if (req.IncludeTitle) parts.Add(title);
+        if (parts.Count == 0) parts.Add(title);
 
         var fileNamePattern = string.Join(" - ", parts);
         return Path.Combine(req.SaveFolder, $"{fileNamePattern}.%(ext)s");
