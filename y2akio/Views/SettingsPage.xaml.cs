@@ -44,6 +44,14 @@ public sealed partial class SettingsPage : Page
         ThemeSystemRadio.IsChecked = s.Theme == AppTheme.System;
 
         VideoFolderBox.Text = s.VideoSaveFolder;
+
+        MultiConnectionToggle.IsOn = s.MultiConnectionEnabled;
+        ConnectionsBox.Value = s.ConnectionsPerFile;
+        ParallelBox.Value = s.ParallelDownloads;
+        SpeedLimitSettingBox.Value = s.SpeedLimitKBps;
+        ResumeOnStartupToggle.IsOn = s.ResumeOnStartup;
+        WatchClipboardToggle.IsOn = s.WatchClipboard;
+        SiteSubfoldersToggle.IsOn = s.SiteSubfolders;
         AudioFolderBox.Text = s.AudioSaveFolder;
         UpdateCookiesState();
     }
@@ -75,9 +83,48 @@ public sealed partial class SettingsPage : Page
         DeleteCookiesButton.Content = L("Settings.CookiesDelete");
         UpdateCookiesState();
         AboutSectionHeader.Text     = L("Settings.About");
+
+        ManagerSectionHeader.Text   = L("Settings.Manager");
+        MultiConnTitle.Text         = L("Settings.MultiConn");
+        MultiConnDesc.Text          = L("Settings.MultiConnDesc");
+        ConnectionsTitle.Text       = L("Settings.Connections");
+        ConnectionsDesc.Text        = L("Settings.ConnectionsDesc");
+        ParallelTitle.Text          = L("Settings.Parallel");
+        ParallelDesc.Text           = L("Settings.ParallelDesc");
+        SpeedLimitTitle.Text        = L("Settings.SpeedLimit");
+        SpeedLimitDesc.Text         = L("Settings.SpeedLimitDesc");
+        ResumeStartupTitle.Text     = L("Settings.ResumeStartup");
+        ResumeStartupDesc.Text      = L("Settings.ResumeStartupDesc");
+        ClipboardTitle.Text         = L("Settings.Clipboard");
+        ClipboardDesc.Text          = L("Settings.ClipboardDesc");
+        SiteFoldersTitle.Text       = L("Settings.SiteFolders");
+        SiteFoldersDesc.Text        = L("Settings.SiteFoldersDesc");
     }
 
     private static string L(string key) => LocalizationService.Get(key);
+
+    // ─── Download manager ────────────────────────────────────────────────────
+
+    private void DownloadSetting_Changed(object sender, RoutedEventArgs e) => SaveDownloadSettings();
+
+    private void DownloadNumber_Changed(NumberBox sender, NumberBoxValueChangedEventArgs args) => SaveDownloadSettings();
+
+    private void SaveDownloadSettings()
+    {
+        if (_loading) return;
+        static int Value(NumberBox box, int fallback) => double.IsNaN(box.Value) ? fallback : (int)box.Value;
+
+        AppSettingsService.Instance.UpdateDownloadSettings(d =>
+        {
+            d.MultiConnectionEnabled = MultiConnectionToggle.IsOn;
+            d.ConnectionsPerFile = Math.Clamp(Value(ConnectionsBox, 8), 1, 16);
+            d.ParallelDownloads = Math.Clamp(Value(ParallelBox, 3), 1, 10);
+            d.SpeedLimitKBps = Math.Max(0, Value(SpeedLimitSettingBox, 0));
+            d.ResumeOnStartup = ResumeOnStartupToggle.IsOn;
+            d.WatchClipboard = WatchClipboardToggle.IsOn;
+            d.SiteSubfolders = SiteSubfoldersToggle.IsOn;
+        });
+    }
 
     // ─── Language toggle ─────────────────────────────────────────────────────
 

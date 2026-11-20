@@ -32,6 +32,10 @@ public class TikTokPhotoService
 
     private readonly Func<string, string?, CancellationToken, Task<IReadOnlyList<string>>>? _impersonatedFetch;
 
+    /// <summary>How long a WAF challenge on plain HttpClient makes later posts skip straight to the impersonated fetch.</summary>
+    private static readonly TimeSpan PlainHttpBackoff = TimeSpan.FromMinutes(30);
+    private static DateTime _skipPlainHttpUntil = DateTime.MinValue;
+
     /// <param name="impersonatedFetch">
     /// Fallback page fetcher with a browser TLS fingerprint (url, cookies.txt text → raw pages), used when
     /// TikTok's WAF answers HttpClient with its bot-challenge page instead of the post. Null = HttpClient only.
@@ -99,11 +103,25 @@ public class TikTokPhotoService
             ct.ThrowIfCancellationRequested();
             try
             {
-                var (html, _) = await MediaGalleryService.GetPageAsync(candidate, cookieHeader, ct);
-                if (IsBotChallenge(html) && _impersonatedFetch is not null)
+                string html;
+                if (_impersonatedFetch is not null && DateTime.UtcNow < _skipPlainHttpUntil)
                 {
+                    // The WAF challenged plain HttpClient recently: go straight to the impersonated
+                    // fetch instead of paying for a request that will only return the challenge again.
                     var pages = await _impersonatedFetch(candidate, cookiesText, ct);
-                    html = pages.FirstOrDefault(p => !IsBotChallenge(p)) ?? html;
+                    html = pages.FirstOrDefault(p => !IsBotChallenge(p)) ?? "";
+                    if (html.Length == 0)
+                        (html, _) = await MediaGalleryService.GetPageAsync(candidate, cookieHeader, ct);
+                }
+                else
+                {
+                    (html, _) = await MediaGalleryService.GetPageAsync(candidate, cookieHeader, ct);
+                    if (IsBotChallenge(html) && _impersonatedFetch is not null)
+                    {
+                        _skipPlainHttpUntil = DateTime.UtcNow + PlainHttpBackoff;
+                        var pages = await _impersonatedFetch(candidate, cookiesText, ct);
+                        html = pages.FirstOrDefault(p => !IsBotChallenge(p)) ?? html;
+                    }
                 }
                 var item = FindItemStruct(html);
                 if (item is null) continue;

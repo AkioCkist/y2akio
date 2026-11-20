@@ -229,6 +229,11 @@ public sealed partial class HomePage : Page
 
         var saveFolder = GallerySaveLocationText.Text?.Trim();
         if (string.IsNullOrWhiteSpace(saveFolder)) saveFolder = AppSettingsService.Instance.VideoSaveFolder;
+        if (AppSettingsService.Instance.SiteSubfolders)
+        {
+            var site = post.Referer is not null ? SiteNames.For(post.Referer) : MediaGalleryService.SanitizeFileName(post.Source.Split(' ')[0]);
+            saveFolder = Path.Combine(saveFolder, string.IsNullOrWhiteSpace(site) ? "Other" : site);
+        }
         var asZip = GallerySaveModeComboBox.SelectedIndex == 1;
 
         _galleryDownloading = true;
@@ -246,7 +251,11 @@ public sealed partial class HomePage : Page
             foreach (var item in items)
             {
                 GalleryStatusText.Text = string.Format(L("Home.GalleryFetching"), payloads.Count + 1, items.Count);
-                payloads.Add((item, await MediaGalleryService.GetItemBytesAsync(item, post.Referer)));
+                // Videos go through the multi-connection engine; photos are small and usually cached already.
+                var bytes = item.IsVideo
+                    ? await MediaGalleryService.GetVideoBytesSegmentedAsync(item, post.Referer, DownloadQueueService.Instance.GlobalLimiter)
+                    : await MediaGalleryService.GetItemBytesAsync(item, post.Referer);
+                payloads.Add((item, bytes));
                 GalleryProgressBar.Value = payloads.Count * 90.0 / items.Count; // last 10% = writing to disk
             }
 
@@ -275,7 +284,7 @@ public sealed partial class HomePage : Page
             ToastService.ShowDownloadComplete(title, resultPath);
             ShowDownloadComplete(string.Format(L("Home.GallerySaved"), items.Count, savedTarget));
 
-            _history.Insert(0, new DownloadHistoryItem
+            await HistoryService.Instance.AddAsync(new DownloadHistoryItem
             {
                 Title = title,
                 Kind = items.All(i => i.IsVideo) ? MediaKind.Video : MediaKind.Image,
@@ -284,7 +293,6 @@ public sealed partial class HomePage : Page
                 FolderPath = folderPath,
                 CompletedAt = DateTime.Now,
             });
-            await _historyStore.SaveAsync(_history);
         }
         catch (Exception ex)
         {

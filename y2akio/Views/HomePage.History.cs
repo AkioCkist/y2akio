@@ -23,7 +23,7 @@ public sealed partial class HomePage : Page
     private async void ClearHistoryButton_Click(object sender, RoutedEventArgs e)
     {
         _history.Clear();
-        await _historyStore.SaveAsync(_history);
+        await HistoryService.Instance.SaveAsync();
     }
 
     private void PlayHistoryItem_Click(object sender, RoutedEventArgs e)
@@ -40,6 +40,7 @@ public sealed partial class HomePage : Page
         {
             var package = new DataPackage();
             package.SetText(item.FilePath);
+            ClipboardWatcher.MarkSeen(item.FilePath);
             Clipboard.SetContent(package);
         }
         await Task.CompletedTask;
@@ -58,7 +59,7 @@ public sealed partial class HomePage : Page
         if ((sender as Button)?.Tag is DownloadHistoryItem item)
         {
             _history.Remove(item);
-            await _historyStore.SaveAsync(_history);
+            await HistoryService.Instance.SaveAsync();
         }
     }
 }

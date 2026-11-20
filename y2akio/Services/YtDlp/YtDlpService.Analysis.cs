@@ -41,6 +41,17 @@ public partial class YtDlpService
                 var playlist = PlaylistInfo.FromFlatJson(root, url);
                 return new AnalyzeResult { IsPlaylist = true, Playlist = playlist };
             }
+
+            // --flat-playlist only stops yt-dlp from resolving *playlist entries*; on a single video
+            // (TikTok, Facebook, Instagram, X, Vimeo, ...) it already ran the full extractor and the
+            // probe carries the complete formats list. Reuse it instead of a second full extraction.
+            if (!root.TryGetProperty("entries", out _)
+                && root.TryGetProperty("formats", out var formatsEl)
+                && formatsEl.ValueKind == JsonValueKind.Array
+                && formatsEl.GetArrayLength() > 0)
+            {
+                return new AnalyzeResult { IsPlaylist = false, Video = VideoInfo.FromJson(flatJson, url) };
+            }
         }
 
         var video = await AnalyzeVideoAsync(url, cookiesPath, ct);
@@ -150,6 +161,12 @@ public partial class YtDlpService
         if (IsYouTubeUrl(url)) return "";
         return $"--cookies \"{cookiesPath}\" ";
     }
+
+    /// <summary>
+    /// Whether yt-dlp will use the imported cookies for this URL at all. YouTube never gets them
+    /// (see <see cref="CookiesArg"/>), so callers can skip decrypting and writing cookies.txt.
+    /// </summary>
+    public static bool NeedsCookies(string url) => !IsYouTubeUrl(NormalizeUrl(url));
 
     private static bool IsYouTubeUrl(string url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri)

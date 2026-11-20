@@ -59,7 +59,8 @@ public sealed partial class HomePage : Page
         string cookiesPath = "";
         try
         {
-            cookiesPath = await AppSettingsService.Instance.GetCookiesFilePathAsync();
+            if (YtDlpService.NeedsCookies(entry.Url))
+                cookiesPath = await AppSettingsService.Instance.AcquireCookiesFileAsync();
             var video = await _ytDlp.AnalyzeVideoAsync(entry.Url, cookiesPath);
             FinishVideoOptions(video);
         }
@@ -71,79 +72,38 @@ public sealed partial class HomePage : Page
         }
         finally
         {
-            if (!string.IsNullOrEmpty(cookiesPath)) AppSettingsService.Instance.CleanupCookiesFile();
+            if (!string.IsNullOrEmpty(cookiesPath)) AppSettingsService.Instance.ReleaseCookiesFile();
             AnalyzingRing.IsActive = false;
             DownloadPlaylistButton.IsEnabled = true;
             _analyzeInProgress = false;
         }
     }
 
-    private async void DownloadPlaylistButton_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// Queues every ticked entry in the download manager as one batch. The queue runs them in parallel
+    /// (Settings → parallel downloads), each with the multi-connection engine; this page shows the
+    /// batch's combined progress.
+    /// </summary>
+    private void DownloadPlaylistButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_currentPlaylist is null) return;
+        if (_currentPlaylist is not { } playlist) return;
 
-        var selected = _currentPlaylist.Entries.Where(en => en.Selected).ToList();
+        var selected = playlist.Entries.Where(en => en.Selected).ToList();
         if (selected.Count == 0) return;
 
         var isVideo = VideoFormatToggle.IsChecked == true;
         var qualitySelection = QualityComboBox.SelectedItem as string ?? "";
+        var batchId = Guid.NewGuid().ToString("N");
 
-        _activeDownloads++;
-        DownloadPlaylistButton.IsEnabled = false;
-        DownloadProgressBar.Visibility = Visibility.Visible;
-        DownloadStatusText.Visibility = Visibility.Visible;
-        DownloadProgressBar.Value = 0;
-        _downloadCts = new CancellationTokenSource();
-
-        ShowLogPanel();
-        var progress = new Progress<DownloadProgress>(p =>
-        {
-            DownloadProgressBar.Value = p.Percent;
-            DownloadStatusText.Text = p.StatusText;
-        });
-
-        string cookiesPath = "";
-        try
-        {
-            cookiesPath = await AppSettingsService.Instance.GetCookiesFilePathAsync();
-            var completed = 0;
-            foreach (var entry in selected)
-            {
-                completed++;
-                DownloadStatusText.Text = $"({completed}/{selected.Count}) Downloading: {entry.Title}";
-                DownloadProgressBar.Value = 0;
-                AppendLog($"=== ({completed}/{selected.Count}) {entry.Title} ===");
-
-                var request = BuildDownloadRequest(entry.Url, isVideo, qualitySelection, cookiesPath);
-                var savedPath = await _ytDlp.DownloadAsync(request, progress, _downloadCts.Token, AppendLog);
-                AppendLog($"Saved: {savedPath}");
-
-                _history.Insert(0, new DownloadHistoryItem
-                {
-                    Title = entry.Title,
-                    Kind = request.Kind,
-                    QualityLabel = qualitySelection,
-                    FilePath = savedPath,
-                    FolderPath = request.SaveFolder,
-                    CompletedAt = DateTime.Now,
-                });
-            }
-            await _historyStore.SaveAsync(_history);
-            ToastService.ShowDownloadComplete($"{selected.Count} videos downloaded", _currentPlaylist.Title);
-            ShowDownloadComplete($"{selected.Count} videos downloaded from playlist");
-        }
-        catch (Exception ex)
-        {
-            AppendLog($"ERROR: {ex.Message}");
-            ErrorBar.Message = ex.Message;
-            ErrorBar.IsOpen = true;
-        }
-        finally
-        {
-            if (!string.IsNullOrEmpty(cookiesPath)) AppSettingsService.Instance.CleanupCookiesFile();
-            _activeDownloads--;
-            DownloadPlaylistButton.IsEnabled = true;
-        }
+        var jobs = selected
+            .Select(entry => DownloadQueueService.Instance.Enqueue(
+                BuildDownloadRequest(entry.Url, isVideo, qualitySelection, ""),
+                entry.Title,
+                ResolveEntryThumbnail(entry) ?? "",
+                qualitySelection,
+                batchId))
+            .ToList();
+        TrackJobs(jobs);
     }
 
     // ─── Gallery posts (TikTok photo posts, Facebook / Instagram posts + stories) ─

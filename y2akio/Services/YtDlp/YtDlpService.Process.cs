@@ -16,6 +16,51 @@ namespace y2akio.Services;
 /// <summary>Child-process execution shared by analysis and download operations.</summary>
 public partial class YtDlpService
 {
+    private static int _prewarmed;
+
+    /// <summary>
+    /// Runs <c>yt-dlp --version</c> and <c>deno --version</c> once in the background at startup. The
+    /// first analyze after boot is otherwise slowed by a cold file cache and antivirus scanning the
+    /// onedir <c>_internal</c> DLLs; paying that while the user is still pasting a link hides it.
+    /// </summary>
+    public Task PrewarmAsync()
+    {
+        if (Interlocked.Exchange(ref _prewarmed, 1) == 1) return Task.CompletedTask;
+        return Task.Run(async () =>
+        {
+            try
+            {
+                var tasks = new List<Task> { RunProcessAsync("--version", CancellationToken.None) };
+                if (!string.IsNullOrWhiteSpace(_denoPath) && File.Exists(_denoPath))
+                    tasks.Add(RunToolAsync(_denoPath, "--version"));
+                if (FfmpegExecutable() is { } ffmpeg && File.Exists(ffmpeg))
+                    tasks.Add(RunToolAsync(ffmpeg, "-hide_banner -version"));
+                await Task.WhenAll(tasks);
+            }
+            catch
+            {
+                // purely an optimization
+            }
+        });
+    }
+
+    private static async Task RunToolAsync(string fileName, string arguments)
+    {
+        using var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = fileName,
+            Arguments = arguments,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        });
+        if (process is null) return;
+        _ = process.StandardError.ReadToEndAsync();
+        await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+    }
+
     private async Task<(string stdout, string stderr, int exitCode)> RunProcessAsync(
         string arguments, CancellationToken ct, Action<string>? onOutputLine = null, string? workingDirectory = null)
     {

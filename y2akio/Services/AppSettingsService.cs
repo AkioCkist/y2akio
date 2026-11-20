@@ -14,6 +14,7 @@ public class AppSettingsChangedEventArgs : EventArgs
     public bool LanguageChanged { get; init; }
     public bool SaveFolderChanged { get; init; }
     public bool CookiesChanged { get; init; }
+    public bool DownloadSettingsChanged { get; init; }
 }
 
 /// <summary>
@@ -40,6 +41,23 @@ public class AppSettingsService
     public string VideoSaveFolder { get => _data.VideoSaveFolder; private set => _data.VideoSaveFolder = value; }
     public string AudioSaveFolder { get => _data.AudioSaveFolder; private set => _data.AudioSaveFolder = value; }
     public bool HasCookies => !string.IsNullOrWhiteSpace(_data.CookiesEncrypted);
+
+    // ── Download engine / manager ──
+    public bool MultiConnectionEnabled => _data.MultiConnectionEnabled;
+    public int ConnectionsPerFile => Math.Clamp(_data.ConnectionsPerFile, 1, 16);
+    public int ParallelDownloads => Math.Clamp(_data.ParallelDownloads, 1, 10);
+    public int SpeedLimitKBps => Math.Max(0, _data.SpeedLimitKBps);
+    public bool ResumeOnStartup => _data.ResumeOnStartup;
+    public bool WatchClipboard => _data.WatchClipboard;
+    public bool SiteSubfolders => _data.SiteSubfolders;
+
+    /// <summary>Updates one or more download-manager settings, then saves and notifies once.</summary>
+    public void UpdateDownloadSettings(Action<AppSettingsData> change)
+    {
+        change(_data);
+        Save();
+        SettingsChanged?.Invoke(this, new AppSettingsChangedEventArgs { DownloadSettingsChanged = true });
+    }
     public string CookiesSourceName => _data.CookiesSourceName ?? "";
 
     private AppSettingsService()
@@ -162,6 +180,46 @@ public class AppSettingsService
         return path;
     }
 
+    private readonly System.Threading.SemaphoreSlim _cookieGate = new(1, 1);
+    private int _cookieLeases;
+
+    /// <summary>
+    /// Like <see cref="GetCookiesFilePathAsync"/>, but shared: concurrent analyses and queued downloads
+    /// each take a lease, and the plaintext file is only deleted when the last lease is released
+    /// (<see cref="ReleaseCookiesFile"/>). Without this, one finished job deleted the file under another.
+    /// </summary>
+    public async Task<string> AcquireCookiesFileAsync()
+    {
+        await _cookieGate.WaitAsync();
+        try
+        {
+            var path = _cookieLeases > 0 && File.Exists(DecryptedCookiesPath)
+                ? DecryptedCookiesPath
+                : await GetCookiesFilePathAsync();
+            if (!string.IsNullOrEmpty(path)) _cookieLeases++;
+            return path;
+        }
+        finally
+        {
+            _cookieGate.Release();
+        }
+    }
+
+    /// <summary>Releases a lease from <see cref="AcquireCookiesFileAsync"/>; the last one deletes the plaintext file.</summary>
+    public void ReleaseCookiesFile()
+    {
+        _cookieGate.Wait();
+        try
+        {
+            if (_cookieLeases > 0) _cookieLeases--;
+            if (_cookieLeases == 0) CleanupCookiesFile();
+        }
+        finally
+        {
+            _cookieGate.Release();
+        }
+    }
+
     /// <summary>Deletes the plaintext cookie temp file so nothing sensitive lingers on disk.</summary>
     public void CleanupCookiesFile()
     {
@@ -181,4 +239,13 @@ public class AppSettingsData
     public string AudioSaveFolder { get; set; } = "";
     public string CookiesEncrypted { get; set; } = "";   // base64 DPAPI blob — never plaintext
     public string CookiesSourceName { get; set; } = "";  // just the filename, for display
+
+    // Download engine / manager
+    public bool MultiConnectionEnabled { get; set; } = true; // IDM-style segmented engine for plain HTTP formats
+    public int ConnectionsPerFile { get; set; } = 8;
+    public int ParallelDownloads { get; set; } = 3;
+    public int SpeedLimitKBps { get; set; }                  // 0 = unlimited
+    public bool ResumeOnStartup { get; set; } = true;
+    public bool WatchClipboard { get; set; }
+    public bool SiteSubfolders { get; set; }
 }

@@ -71,6 +71,7 @@ The exact dependency layout and Visual Studio workflow are documented in the [De
 3. [Project layout](docs/project-layout.md)
 4. [Build and publish](docs/build-and-publish.md)
 5. [Analyze optimization notes](docs/analyze-optimization.md)
+6. [Download engine](docs/download-engine-plan.md)
 
 ## Technology
 

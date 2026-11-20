@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <!-- The download engine has no WinUI dependency, so its sources are compiled straight into the
+       tests instead of referencing the WinUI app project. -->
+  <ItemGroup>
+    <Compile Include="..\y2akio\Services\Downloads\SegmentedDownloader.cs" Link="Engine\SegmentedDownloader.cs" />
+    <Compile Include="..\y2akio\Services\Downloads\DownloadState.cs" Link="Engine\DownloadState.cs" />
+    <Compile Include="..\y2akio\Services\Downloads\RateLimiter.cs" Link="Engine\RateLimiter.cs" />
+    <Compile Include="..\y2akio\Services\Downloads\SparseFile.cs" Link="Engine\SparseFile.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+</Project>

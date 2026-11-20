@@ -21,21 +21,15 @@ namespace y2akio.Views;
 /// <summary>Home page: the YT-DLP downloader (URL analyze, options, playlist, log, history).</summary>
 public sealed partial class HomePage : Page
 {
-    private readonly YtDlpService _ytDlp = new(
-        ytDlpPath: ResolveYtDlpPath(),
-        ffmpegDirectory: ResolveFfmpegDirectory(),
-        denoPath: ExecutableLocator.Find("deno.exe", Path.Combine("bin", "deno"), "bin", "") ?? "");
-    private readonly HistoryStore _historyStore = new();
-    private readonly ObservableCollection<DownloadHistoryItem> _history = new();
+    private static YtDlpService _ytDlp => AppServices.YtDlp;
+    private static System.Collections.ObjectModel.ObservableCollection<DownloadHistoryItem> _history => HistoryService.Instance.Items;
 
     private VideoInfo? _currentVideo;
     private PlaylistInfo? _currentPlaylist;
-    private CancellationTokenSource? _downloadCts;
     private ObservableCollection<SubtitleSelection>? _autoSubtitleLangs;
 
     private bool _analyzeInProgress;   // guards Enter+click / double-click races while an analyze runs
     private bool _previewActive;       // instant card is shown but the full dump hasn't populated options yet
-    private int _activeDownloads;      // so an analyze finish never re-enables DownloadNow mid-download
 
     private readonly TikTokPhotoService _tikTok;
     private readonly FacebookStoryService _facebookStories = new();
@@ -47,31 +41,13 @@ public sealed partial class HomePage : Page
     private CancellationTokenSource? _galleryLoadCts; // cancels thumbnail loading when another post replaces it
     private bool _galleryDownloading;
 
-    /// <summary>
-    /// Looks for the bundled yt-dlp first (so it works after you publish/copy the app elsewhere),
-    /// then PATH, then finally just "yt-dlp.exe". The bundle is the onedir build (bin\yt-dlp\ with
-    /// _internal\): the onefile exe re-extracts ~40MB to %TEMP% on every run, which antivirus
-    /// rescans each time on machines that haven't seen it — analyze took ages there.
-    /// </summary>
-    private static string ResolveYtDlpPath()
-        => ExecutableLocator.Find("yt-dlp.exe", Path.Combine("bin", "yt-dlp"), "bin", "") ?? "yt-dlp.exe";
-
-    private static string ResolveFfmpegDirectory()
-    {
-        var executable = ExecutableLocator.Find(
-            "ffmpeg.exe",
-            Path.Combine("bin", "ffmpeg-9.0.1-full_build", "bin"),
-            "bin",
-            "");
-        return executable is null ? "" : Path.GetDirectoryName(executable) ?? "";
-    }
-
     public HomePage()
     {
         _tikTok = new(_ytDlp.FetchPagesAsync);
         InitializeComponent();
 
         HistoryList.ItemsSource = _history;
+        Unloaded += (_, _) => UntrackJobs();
 
         // Load default save folders from persisted settings
         VideoSaveLocationTextBox.Text = AppSettingsService.Instance.VideoSaveFolder;
@@ -79,7 +55,10 @@ public sealed partial class HomePage : Page
 
         ToastService.Log = msg => AppendLog(msg);
 
-        _ = LoadHistoryAsync();
+        _ = HistoryService.Instance.EnsureLoadedAsync();
+        ShowPendingClipboardLink();
+        ClipboardWatcher.LinkDetected += OnClipboardLinkDetected;
+        Unloaded += (_, _) => ClipboardWatcher.LinkDetected -= OnClipboardLinkDetected;
 
         // Apply current language on page load
         ApplyLanguage();
@@ -205,13 +184,6 @@ public sealed partial class HomePage : Page
 
     // ─── History ──────────────────────────────────────────────────────────────
 
-    private async Task LoadHistoryAsync()
-    {
-        var items = await _historyStore.LoadAsync();
-        foreach (var item in items.OrderByDescending(i => i.CompletedAt))
-            _history.Add(item);
-    }
-
     // ─── URL analysis ────────────────────────────────────────────────────────
 
     private void UrlTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -237,20 +209,48 @@ public sealed partial class HomePage : Page
         AnalyzeButton.IsEnabled = false;
 
         string cookiesPath = "";
+        using var speculativeCts = new CancellationTokenSource();
+        Task<AnalyzeResult>? speculative = null;
         try
         {
+            // Facebook and X post links are only known to be photo posts after their page is fetched; a
+            // video post then falls through to yt-dlp. Start that yt-dlp analysis in parallel so a video
+            // post doesn't pay for the page fetch and the extraction one after the other.
+            if (FacebookPostService.IsPostUrl(url) || XPostService.IsPostUrl(url))
+            {
+                cookiesPath = await AppSettingsService.Instance.AcquireCookiesFileAsync();
+                speculative = _ytDlp.AnalyzeAsync(url, cookiesPath, speculativeCts.Token);
+            }
+
             // TikTok photo posts (yt-dlp only extracts their audio), Facebook / Instagram photo posts and
             // stories (photos unsupported / login-only in yt-dlp) never reach yt-dlp — they get the
             // pick-and-save gallery instead.
-            if (await TryFetchGalleryPostAsync(url) is { } galleryPost)
+            MediaGalleryPost? galleryPost;
+            try
             {
+                galleryPost = await TryFetchGalleryPostAsync(url);
+            }
+            catch
+            {
+                AbandonSpeculative(speculative, speculativeCts);
+                throw;
+            }
+            if (galleryPost is not null)
+            {
+                AbandonSpeculative(speculative, speculativeCts);
                 ShowGalleryPost(galleryPost);
                 return;
             }
 
-            cookiesPath = await AppSettingsService.Instance.GetCookiesFilePathAsync();
+            // YouTube never gets cookies (yt-dlp skips them there) — don't decrypt / write cookies.txt for it.
+            if (speculative is null && YtDlpService.NeedsCookies(url))
+                cookiesPath = await AppSettingsService.Instance.AcquireCookiesFileAsync();
 
-            if (YtDlpService.LooksLikeSingleVideoUrl(url))
+            if (speculative is not null)
+            {
+                ShowAnalyzeResult(await speculative);
+            }
+            else if (YtDlpService.LooksLikeSingleVideoUrl(url))
             {
                 // Fast single-video path: ONE full dump (~4s). Paint the card from oEmbed (~0.2s) while it runs.
                 _currentVideo = null;
@@ -263,18 +263,7 @@ public sealed partial class HomePage : Page
             else
             {
                 // Ambiguous / playlist URL: probe first to detect a playlist, then populate.
-                var result = await _ytDlp.AnalyzeAsync(url, cookiesPath);
-
-                if (result.IsPlaylist && result.Playlist is { } playlist)
-                {
-                    _currentPlaylist = playlist;
-                    PopulatePlaylistPanel(playlist);
-                    PlaylistPanel.Visibility = Visibility.Visible;
-                }
-                else if (result.Video is { } video)
-                {
-                    FinishVideoOptions(video);
-                }
+                ShowAnalyzeResult(await _ytDlp.AnalyzeAsync(url, cookiesPath));
             }
         }
         catch (Exception ex)
@@ -285,11 +274,33 @@ public sealed partial class HomePage : Page
         }
         finally
         {
-            if (!string.IsNullOrEmpty(cookiesPath)) AppSettingsService.Instance.CleanupCookiesFile();
+            if (!string.IsNullOrEmpty(cookiesPath)) AppSettingsService.Instance.ReleaseCookiesFile();
             AnalyzingRing.IsActive = false;
             AnalyzeButton.IsEnabled = true;
             _analyzeInProgress = false;
         }
+    }
+
+    private void ShowAnalyzeResult(AnalyzeResult result)
+    {
+        if (result.IsPlaylist && result.Playlist is { } playlist)
+        {
+            _currentPlaylist = playlist;
+            PopulatePlaylistPanel(playlist);
+            PlaylistPanel.Visibility = Visibility.Visible;
+        }
+        else if (result.Video is { } video)
+        {
+            FinishVideoOptions(video);
+        }
+    }
+
+    /// <summary>Kills a speculative yt-dlp analysis whose result is no longer needed and observes its outcome.</summary>
+    private static void AbandonSpeculative(Task<AnalyzeResult>? speculative, CancellationTokenSource cts)
+    {
+        if (speculative is null) return;
+        try { cts.Cancel(); } catch (ObjectDisposedException) { }
+        _ = speculative.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
     }
 
     // ─── Playlist ─────────────────────────────────────────────────────────────

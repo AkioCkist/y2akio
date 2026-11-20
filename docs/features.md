@@ -39,6 +39,16 @@ Supported formats are MP3, M4A, AAC, FLAC, Opus, Vorbis/OGG, WAV, ALAC, and WMA.
 
 The output name can include the download date and time, channel/uploader, and media title. If every option is cleared, the title is still used to prevent an empty filename.
 
+## Download manager
+
+- Multi-connection engine (IDM-style dynamic segmentation) for plain HTTP formats such as YouTube video and audio streams: several connections per file, the largest remaining segment is split whenever a connection is free, up to 16 connections (6 for YouTube).
+- Resumes partial downloads without fetching finished bytes again, after a pause, a network loss, or closing the app (`*.y2apart` + `*.y2a.json` next to the target file).
+- Retries dropped or stalled connections with exponential backoff, refreshes expired signed links (403/410), and restarts cleanly when the remote file changed.
+- HLS/DASH formats use yt-dlp with as many parallel fragments as the connection setting, fragment retries, and automatic re-runs on network errors.
+- Downloads page: queue with parallel-download limit, pause / resume / cancel per job or for all, an IDM-style segment bar, speed and ETA, a global and per-job speed limit, a scheduled start time, and sleep / shut down when everything finished.
+- Optional clipboard watching (offers to analyze a copied link) and a subfolder per website.
+- Forced-codec downloads transcode on NVENC, Quick Sync or AMF when a test encode proves the encoder works.
+
 ## TikTok photo posts
 
 - Detects TikTok photo post URLs, including resolved short links.

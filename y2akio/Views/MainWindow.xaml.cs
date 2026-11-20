@@ -37,6 +37,21 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
 
+        // ── Download manager: restore the queue (resumes unfinished jobs), warm the tools ──
+        _ = HistoryService.Instance.EnsureLoadedAsync();
+        DownloadQueueService.Instance.Initialize(DispatcherQueue, AppServices.YtDlp);
+        DownloadQueueService.Instance.QueueChanged += UpdateDownloadsBadge;
+        UpdateDownloadsBadge();
+        _ = AppServices.YtDlp.PrewarmAsync();
+
+        // ── Clipboard link watcher (Settings → watch clipboard) ──
+        ClipboardWatcher.Start();
+        Activated += (_, args) =>
+        {
+            if (args.WindowActivationState != WindowActivationState.Deactivated)
+                _ = ClipboardWatcher.CheckAsync();
+        };
+
         // ── Default page ───────────────────────────────────────────────────
         ContentFrame.Navigate(typeof(HomePage));
 
@@ -54,6 +69,8 @@ public sealed partial class MainWindow : Window
         // ── Security: never leave the decrypted cookies.txt behind after the window closes ──
         Closed += (_, _) =>
         {
+            // Stops running downloads (kills yt-dlp) and saves the queue; they resume next start.
+            DownloadQueueService.Instance.Shutdown();
             AppSettingsService.Instance.CleanupCookiesFile();
             y2akio.Helpers.PopupCursorFix.Uninstall();
         };
@@ -70,6 +87,13 @@ public sealed partial class MainWindow : Window
             AppTheme.Dark  => ElementTheme.Dark,
             _              => ElementTheme.Default,   // follows Windows system setting
         };
+    }
+
+    /// <summary>Number of running + waiting downloads on the sidebar item.</summary>
+    private void UpdateDownloadsBadge()
+    {
+        var pending = DownloadQueueService.Instance.PendingCount;
+        NavDownloadsItem.InfoBadge = pending > 0 ? new InfoBadge { Value = pending } : null;
     }
 
     // ─── Navigation ──────────────────────────────────────────────────────────
@@ -90,6 +114,10 @@ public sealed partial class MainWindow : Window
             case "home":
                 if (ContentFrame.CurrentSourcePageType != typeof(HomePage))
                     ContentFrame.Navigate(typeof(HomePage));
+                break;
+            case "downloads":
+                if (ContentFrame.CurrentSourcePageType != typeof(DownloadsPage))
+                    ContentFrame.Navigate(typeof(DownloadsPage));
                 break;
             case "imageResize":
                 if (ContentFrame.CurrentSourcePageType != typeof(ImageResizePage))

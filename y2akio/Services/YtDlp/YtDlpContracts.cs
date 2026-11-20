@@ -20,6 +20,17 @@ public class DownloadRequest
     public required MediaKind Kind { get; init; }
     public required string SaveFolder { get; init; }
 
+    /// <summary>
+    /// yt-dlp info JSON from the analyze step (empty = none). When fresh, the download loads it with
+    /// <c>--load-info-json</c> instead of extracting the page again.
+    /// </summary>
+    public string InfoJson { get; set; } = "";
+    public DateTime InfoJsonAnalyzedAtUtc { get; init; }
+
+    /// <summary>When the user asked for this download. Feeds the date/time file-name prefix, so a paused
+    /// and resumed job keeps the same file names (and finds its partial files again).</summary>
+    public DateTime RequestedAt { get; init; } = DateTime.Now;
+
     // Video-specific
     public int? TargetHeight { get; init; }        // null = "Best Quality"
     public string ContainerFormat { get; init; } = "mp4"; // mp4 / mkv / webm
@@ -45,7 +56,7 @@ public class DownloadRequest
     public bool EmbedMetadata { get; init; } = true;
 
     /// <summary>Path to a Netscape-format cookies.txt file, passed to yt-dlp via --cookies (needed for login-gated sites like X/Twitter). Empty = no cookies.</summary>
-    public string CookiesPath { get; init; } = "";
+    public string CookiesPath { get; set; } = "";
 
     // "embed" -> --embed-thumbnail, "save" -> write thumbnail alongside file, "none" -> skip
     public string ThumbnailMode { get; init; } = "embed";
@@ -55,6 +66,45 @@ public class DownloadProgress
 {
     public double Percent { get; init; }
     public string StatusText { get; init; } = "";
+
+    // Filled by the multi-connection engine (zero / null for plain yt-dlp progress lines).
+    public double BytesPerSecond { get; init; }
+    public long DownloadedBytes { get; init; }
+    public long TotalBytes { get; init; }
+    public TimeSpan? Eta { get; init; }
+    public int Connections { get; init; }
+
+    /// <summary>Per-segment state of the file being fetched, for an IDM-style segment bar. Positions are relative to <see cref="SegmentsTotal"/>.</summary>
+    public IReadOnlyList<y2akio.Services.Downloads.SegmentSnapshot>? Segments { get; init; }
+    public long SegmentsTotal { get; init; }
+}
+
+/// <summary>Settings for the multi-connection engine on one download.</summary>
+public sealed class DownloadEngineOptions
+{
+    /// <summary>False = let yt-dlp download everything itself (still with retries and parallel fragments).</summary>
+    public bool Enabled { get; init; } = true;
+
+    /// <summary>Connections per file (and parallel fragments for HLS/DASH).</summary>
+    public int MaxConnections { get; init; } = 8;
+
+    /// <summary>Speed limiters this download counts against (global, per job).</summary>
+    public IReadOnlyList<y2akio.Services.Downloads.RateLimiter> RateLimiters { get; init; } = Array.Empty<y2akio.Services.Downloads.RateLimiter>();
+
+    /// <summary>Told about every partial file the engine starts, so a cancelled job can delete them.</summary>
+    public Action<string>? OnPartialFile { get; init; }
+
+    /// <summary>The tightest active limit in bytes/s (0 = none), for yt-dlp's own --limit-rate.</summary>
+    public long CurrentRateLimitBytes()
+    {
+        long limit = 0;
+        foreach (var l in RateLimiters)
+        {
+            var v = l.BytesPerSecond;
+            if (v > 0 && (limit == 0 || v < limit)) limit = v;
+        }
+        return limit;
+    }
 }
 
 /// <summary>Instant title/author/thumbnail from YouTube's oEmbed endpoint (used to paint the options card while the full dump runs).</summary>

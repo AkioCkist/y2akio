@@ -52,6 +52,29 @@ public static class ToastService
         }
     }
 
+    /// <summary>Plain two-line notification (no click action).</summary>
+    public static void ShowInfo(string title, string message)
+    {
+        try
+        {
+            EnsureRegistered();
+            string xml = $@"
+<toast>
+    <visual>
+        <binding template=""ToastGeneric"">
+            <text>{SecurityElement.Escape(title)}</text>
+            <text>{SecurityElement.Escape(message)}</text>
+        </binding>
+    </visual>
+</toast>";
+            AppNotificationManager.Default.Show(new AppNotification(xml));
+        }
+        catch (Exception ex)
+        {
+            Log?.Invoke($"Toast failed: {ex.Message}");
+        }
+    }
+
     public static void EnsureRegistered()
     {
         if (_registered) return;

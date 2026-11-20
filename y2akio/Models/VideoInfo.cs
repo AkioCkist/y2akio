@@ -13,6 +13,15 @@ public class VideoInfo
     public string OriginalUrl { get; init; } = "";
     public List<VideoFormat> Formats { get; init; } = new();
 
+    /// <summary>
+    /// The raw yt-dlp info JSON this was parsed from. Downloads hand it back to yt-dlp via
+    /// <c>--load-info-json</c> so the page/player extraction (2-4s) is not repeated.
+    /// </summary>
+    public string InfoJson { get; init; } = "";
+
+    /// <summary>When <see cref="InfoJson"/> was extracted; signed media URLs in it expire after a few hours.</summary>
+    public System.DateTime AnalyzedAtUtc { get; init; } = System.DateTime.UtcNow;
+
     /// <summary>Author-uploaded subtitles: language code -> display name (e.g. "en" -> "English").</summary>
     public Dictionary<string, string> ManualSubtitleLanguages { get; init; } = new();
 
@@ -55,6 +64,7 @@ public class VideoInfo
             DurationSeconds = duration,
             OriginalUrl = originalUrl,
             Formats = formats,
+            InfoJson = json,
             ManualSubtitleLanguages = ParseSubtitleLanguages(root, "subtitles"),
             AutoSubtitleLanguages = ParseSubtitleLanguages(root, "automatic_captions"),
         };

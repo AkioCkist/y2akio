@@ -40,6 +40,12 @@
             <NavigationView.MenuItems>
 
                 <NavigationViewItem x:Name="NavHomeItem" Content="Home" Icon="Home" Tag="home" IsSelected="True" />
+                <NavigationViewItem x:Name="NavDownloadsItem" Content="Downloads" Tag="downloads">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE896;" FontFamily="Segoe Fluent Icons" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
                 <NavigationViewItem Content="Image Resize" Tag="imageResize">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE7C3;" FontFamily="Segoe Fluent Icons" />

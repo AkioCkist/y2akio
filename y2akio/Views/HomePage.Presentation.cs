@@ -88,7 +88,7 @@ public sealed partial class HomePage : Page
         PopulateOptionsPanel(video); // overwrites the card + fills subtitle languages + quality list
         _previewActive = false;
         OptionsPanel.Visibility = Visibility.Visible;
-        DownloadNowButton.IsEnabled = _activeDownloads == 0;
+        DownloadNowButton.IsEnabled = _currentVideo is not null;
     }
 
     /// <summary>An analyze failed while only the instant card was showing — hide it rather than leave a half-loaded panel.</summary>
@@ -97,7 +97,7 @@ public sealed partial class HomePage : Page
         if (!_previewActive) return;
         OptionsPanel.Visibility = Visibility.Collapsed;
         _previewActive = false;
-        DownloadNowButton.IsEnabled = _activeDownloads == 0;
+        DownloadNowButton.IsEnabled = _currentVideo is not null;
     }
 
     /// <summary>

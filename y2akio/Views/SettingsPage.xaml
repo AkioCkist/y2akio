@@ -262,6 +262,126 @@
                 </Grid>
             </Border>
 
+            <!-- ══════════════ DOWNLOAD MANAGER ══════════════ -->
+            <TextBlock x:Name="ManagerSectionHeader"
+                       Text="Download manager"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       Opacity="0.6"
+                       Margin="4,24,0,4" />
+
+            <Border CornerRadius="8,8,0,0" Padding="16,14"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1,1,1,0">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock x:Name="MultiConnTitle" FontSize="14" />
+                        <TextBlock x:Name="MultiConnDesc" FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ToggleSwitch x:Name="MultiConnectionToggle" Grid.Column="1" OnContent="" OffContent="" MinWidth="0" Toggled="DownloadSetting_Changed" />
+                </Grid>
+            </Border>
+            <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" HorizontalAlignment="Stretch" Margin="16,0" />
+            <Border CornerRadius="0" Padding="16,14"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1,0,1,0">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock x:Name="ConnectionsTitle" FontSize="14" />
+                        <TextBlock x:Name="ConnectionsDesc" FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <NumberBox x:Name="ConnectionsBox" Grid.Column="1" Minimum="1" Maximum="16" Width="140" SpinButtonPlacementMode="Inline" ValueChanged="DownloadNumber_Changed" />
+                </Grid>
+            </Border>
+            <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" HorizontalAlignment="Stretch" Margin="16,0" />
+            <Border CornerRadius="0" Padding="16,14"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1,0,1,0">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock x:Name="ParallelTitle" FontSize="14" />
+                        <TextBlock x:Name="ParallelDesc" FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <NumberBox x:Name="ParallelBox" Grid.Column="1" Minimum="1" Maximum="10" Width="140" SpinButtonPlacementMode="Inline" ValueChanged="DownloadNumber_Changed" />
+                </Grid>
+            </Border>
+            <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" HorizontalAlignment="Stretch" Margin="16,0" />
+            <Border CornerRadius="0" Padding="16,14"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1,0,1,0">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock x:Name="SpeedLimitTitle" FontSize="14" />
+                        <TextBlock x:Name="SpeedLimitDesc" FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <NumberBox x:Name="SpeedLimitSettingBox" Grid.Column="1" Minimum="0" Maximum="1000000" Width="140" SpinButtonPlacementMode="Inline" ValueChanged="DownloadNumber_Changed" />
+                </Grid>
+            </Border>
+            <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" HorizontalAlignment="Stretch" Margin="16,0" />
+            <Border CornerRadius="0" Padding="16,14"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1,0,1,0">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock x:Name="ResumeStartupTitle" FontSize="14" />
+                        <TextBlock x:Name="ResumeStartupDesc" FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ToggleSwitch x:Name="ResumeOnStartupToggle" Grid.Column="1" OnContent="" OffContent="" MinWidth="0" Toggled="DownloadSetting_Changed" />
+                </Grid>
+            </Border>
+            <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" HorizontalAlignment="Stretch" Margin="16,0" />
+            <Border CornerRadius="0" Padding="16,14"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1,0,1,0">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock x:Name="ClipboardTitle" FontSize="14" />
+                        <TextBlock x:Name="ClipboardDesc" FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ToggleSwitch x:Name="WatchClipboardToggle" Grid.Column="1" OnContent="" OffContent="" MinWidth="0" Toggled="DownloadSetting_Changed" />
+                </Grid>
+            </Border>
+            <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}" HorizontalAlignment="Stretch" Margin="16,0" />
+            <Border CornerRadius="0,0,8,8" Padding="16,14"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1,0,1,1">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock x:Name="SiteFoldersTitle" FontSize="14" />
+                        <TextBlock x:Name="SiteFoldersDesc" FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ToggleSwitch x:Name="SiteSubfoldersToggle" Grid.Column="1" OnContent="" OffContent="" MinWidth="0" Toggled="DownloadSetting_Changed" />
+                </Grid>
+            </Border>
+
             <!-- ══════════════ ABOUT ══════════════ -->
             <TextBlock x:Name="AboutSectionHeader"
                        Text="About"

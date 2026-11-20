@@ -105,6 +105,43 @@ public static class MediaGalleryService
         return data;
     }
 
+    /// <summary>
+    /// Video bytes of a gallery item through the multi-connection engine (several connections, retries,
+    /// no full re-download on a dropped connection). Falls back to the plain single-request download.
+    /// </summary>
+    public static async Task<byte[]> GetVideoBytesSegmentedAsync(
+        MediaGalleryItem item, string? referer, Downloads.RateLimiter? limiter = null, CancellationToken ct = default)
+    {
+        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["User-Agent"] = UserAgent };
+        if (referer is not null) headers["Referer"] = referer;
+        var options = new Downloads.SegmentedDownloadOptions
+        {
+            MaxConnections = AppSettingsService.Instance.ConnectionsPerFile,
+            RateLimiters = limiter is null ? Array.Empty<Downloads.RateLimiter>() : new[] { limiter },
+        };
+
+        foreach (var url in item.Urls)
+        {
+            var temp = Path.Combine(Path.GetTempPath(), $"y2akio-gallery-{Guid.NewGuid():N}.bin");
+            try
+            {
+                await Task.Run(() => new Downloads.SegmentedDownloader(options).DownloadAsync(new Downloads.DownloadSource(url, headers), temp, ct: ct), ct);
+                return await File.ReadAllBytesAsync(temp, ct);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch
+            {
+                // try the next mirror / quality
+            }
+            finally
+            {
+                Downloads.DownloadState.Delete(temp);
+                try { File.Delete(temp); } catch { /* best-effort */ }
+            }
+        }
+        return await GetItemBytesAsync(item, referer, ct);
+    }
+
     /// <summary>Writes the given items as loose files into <paramref name="folder"/>. Returns the written paths.</summary>
     public static async Task<List<string>> SaveToFolderAsync(
         MediaGalleryPost post, IReadOnlyList<(MediaGalleryItem Item, byte[] Data)> items, string folder, CancellationToken ct = default)

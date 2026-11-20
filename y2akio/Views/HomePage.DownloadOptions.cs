@@ -175,7 +175,8 @@ public sealed partial class HomePage : Page
 
     // ─── Download ─────────────────────────────────────────────────────────────
 
-    private DownloadRequest BuildDownloadRequest(string url, bool isVideo, string qualitySelection, string cookiesPath)
+    /// <param name="analyzed">The analyzed video, when the download is for it — its info JSON spares yt-dlp a re-extraction.</param>
+    private DownloadRequest BuildDownloadRequest(string url, bool isVideo, string qualitySelection, string cookiesPath, VideoInfo? analyzed = null)
     {
         int? targetHeight = null;
         int? audioKbps = null;
@@ -191,8 +192,8 @@ public sealed partial class HomePage : Page
             if (int.TryParse(digits, out var kbps)) audioKbps = kbps;
         }
 
-        // Use the correct save folder for the chosen media type
-        var saveFolder = isVideo ? VideoSaveLocationTextBox.Text : AudioSaveLocationTextBox.Text;
+        // Use the correct save folder for the chosen media type (+ \<Site> when that setting is on)
+        var saveFolder = SiteNames.ApplySubfolder(isVideo ? VideoSaveLocationTextBox.Text : AudioSaveLocationTextBox.Text, url);
 
         // Non-auto codec forces a transcode → the target container must be MP4 (all codecs here mux into MP4).
         var videoCodec = (VideoCodecComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "auto";
@@ -203,6 +204,8 @@ public sealed partial class HomePage : Page
         return new DownloadRequest
         {
             Url = url,
+            InfoJson = analyzed?.InfoJson ?? "",
+            InfoJsonAnalyzedAtUtc = analyzed?.AnalyzedAtUtc ?? default,
             Kind = isVideo ? MediaKind.Video : MediaKind.Audio,
             SaveFolder = saveFolder,
             CookiesPath = cookiesPath,
@@ -264,60 +267,17 @@ public sealed partial class HomePage : Page
         return codes.Count == 0 ? "all" : string.Join(",", codes);
     }
 
-    private async void DownloadNowButton_Click(object sender, RoutedEventArgs e)
+    /// <summary>Queues the analyzed video in the download manager; this page follows its progress.</summary>
+    private void DownloadNowButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_currentVideo is null) return;
+        if (_currentVideo is not { } video) return;
 
         var isVideo = VideoFormatToggle.IsChecked == true;
         var qualitySelection = QualityComboBox.SelectedItem as string ?? "";
-        string cookiesPath = await AppSettingsService.Instance.GetCookiesFilePathAsync();
-        var request = BuildDownloadRequest(_currentVideo.OriginalUrl, isVideo, qualitySelection, cookiesPath);
-
-        _activeDownloads++;
-        DownloadNowButton.IsEnabled = false;
-        DownloadProgressBar.Visibility = Visibility.Visible;
-        DownloadStatusText.Visibility = Visibility.Visible;
-        DownloadProgressBar.Value = 0;
-        _downloadCts = new CancellationTokenSource();
-
-        ShowLogPanel();
-        var progress = new Progress<DownloadProgress>(p =>
-        {
-            DownloadProgressBar.Value = p.Percent;
-            DownloadStatusText.Text = p.StatusText;
-        });
-
-        try
-        {
-            var savedPath = await _ytDlp.DownloadAsync(request, progress, _downloadCts.Token, AppendLog);
-            AppendLog($"Saved: {savedPath}");
-            ToastService.ShowDownloadComplete(_currentVideo.Title, savedPath);
-            ShowDownloadComplete($"Video saved: {_currentVideo.Title}");
-
-            var historyItem = new DownloadHistoryItem
-            {
-                Title = _currentVideo.Title,
-                Kind = request.Kind,
-                QualityLabel = qualitySelection,
-                FilePath = savedPath,
-                FolderPath = request.SaveFolder,
-                CompletedAt = DateTime.Now,
-            };
-            _history.Insert(0, historyItem);
-            await _historyStore.SaveAsync(_history);
-        }
-        catch (Exception ex)
-        {
-            AppendLog($"ERROR: {ex.Message}");
-            ErrorBar.Message = ex.Message;
-            ErrorBar.IsOpen = true;
-        }
-        finally
-        {
-            if (!string.IsNullOrEmpty(cookiesPath)) AppSettingsService.Instance.CleanupCookiesFile();
-            _activeDownloads--;
-            DownloadNowButton.IsEnabled = _activeDownloads == 0;
-        }
+        // Cookies are leased by the queue when the job actually starts.
+        var request = BuildDownloadRequest(video.OriginalUrl, isVideo, qualitySelection, "", video);
+        var job = DownloadQueueService.Instance.Enqueue(request, video.Title, video.ThumbnailUrl, qualitySelection);
+        TrackJobs(new[] { job });
     }
 
     // ─── History actions ─────────────────────────────────────────────────────

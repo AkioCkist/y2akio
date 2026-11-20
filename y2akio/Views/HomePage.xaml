@@ -71,6 +71,12 @@
 
             <InfoBar x:Name="ErrorBar" Severity="Error" IsOpen="False" Title="Couldn't analyze that link" />
             <InfoBar x:Name="SuccessBar" Severity="Success" IsOpen="False" Title="Download complete" IsClosable="True" />
+            <InfoBar x:Name="ClipboardBar" Severity="Informational" IsOpen="False" IsClosable="True"
+                     Title="Link copied" Closed="ClipboardBar_Closed">
+                <InfoBar.ActionButton>
+                    <Button x:Name="ClipboardAnalyzeButton" Content="Analyze" Click="ClipboardAnalyzeButton_Click" />
+                </InfoBar.ActionButton>
+            </InfoBar>
             <ProgressRing x:Name="AnalyzingRing" IsActive="False" HorizontalAlignment="Center" Width="32" Height="32" />
 
             <!-- Analyzed video + download options -->

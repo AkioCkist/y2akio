@@ -19,6 +19,20 @@ The probe returned complete format data for a single video, so the second extrac
 - Subtitle maps remain part of the full dump. Fetching them lazily would require another expensive extraction.
 - Ambiguous and non-YouTube URLs retain the conservative flat-probe path.
 
+## Further speedups (2026-11)
+
+Measured on the bundled yt-dlp 2026.08.19 (YouTube "Me at the zoo"): `--version` 0.4s, full dump 2.8–4.2s, `--load-info-json` simulate 0.6s versus 2.1s from the URL.
+
+- **Single non-YouTube videos reuse the flat probe.** `--flat-playlist` only affects playlist entries; on a single TikTok/Dailymotion/Facebook video the probe already carries `formats`, so `AnalyzeAsync` parses it directly instead of running a second full extraction. Results without `formats` (Vimeo, `_type: url`) still get the full dump.
+- **Downloads reuse the analyze JSON.** `VideoInfo.InfoJson` is passed to `DownloadRequest.InfoJson` and handed to yt-dlp with `--load-info-json`, which skips page/player extraction and the JS challenge. JSON older than 3 hours is ignored (signed URLs expire), and a failed cached attempt falls back to the normal URL attempts.
+- **`--concurrent-fragments 4`** for HLS/DASH formats.
+- **Prewarm.** `HomePage` runs `yt-dlp --version`, `deno --version` and `ffmpeg -version` in the background at startup so the first analyze does not pay for a cold file cache and antivirus scan.
+- **No cookies for YouTube.** `YtDlpService.NeedsCookies` skips decrypting and writing `cookies.txt` for YouTube links, which yt-dlp never sends cookies to.
+- **Facebook/X post links analyze in parallel.** The yt-dlp analysis starts at the same time as the gallery page fetch and is cancelled when the post turns out to be a photo post.
+- **TikTok WAF memo.** After HttpClient gets the bot challenge once, TikTok photo posts go straight to the impersonated fetch for 30 minutes.
+- **Playlist downloads run 3 at a time**, and one failed entry no longer stops the rest.
+- **GPU recode.** A forced codec (H.264/HEVC/AV1) uses NVENC, Quick Sync or AMF when a test encode proves the encoder works, otherwise falls back to the CPU encoder. The probe result is cached per app run.
+
 ## URL classification
 
 `YtDlpService.LooksLikeSingleVideoUrl` returns true only for known single-video forms without a `list` query:
