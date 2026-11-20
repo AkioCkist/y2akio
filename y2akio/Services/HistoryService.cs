@@ -25,8 +25,35 @@ public sealed class HistoryService
     private async Task LoadAsync()
     {
         var items = await _store.LoadAsync();
+
+        // Entries saved before the UTF-8 fix can point at a name without its emoji / Vietnamese letters.
+        var repaired = await Task.Run(() =>
+        {
+            var changed = false;
+            foreach (var item in items)
+            {
+                if (string.IsNullOrWhiteSpace(item.FilePath) || System.IO.File.Exists(item.FilePath)) continue;
+                if (Helpers.MediaPathRepair.FindByLooseName(item.FilePath, item.FolderPath, item.CompletedAt) is { } real)
+                {
+                    item.FilePath = real;
+                    changed = true;
+                }
+            }
+            return changed;
+        });
+
         foreach (var item in items.OrderByDescending(i => i.CompletedAt))
             Items.Add(item);
+        if (repaired) await SaveAsync();
+    }
+
+    /// <summary>Re-finds a moved / mis-recorded file for <paramref name="item"/>; true when its path was fixed.</summary>
+    public async Task<bool> TryRepairAsync(DownloadHistoryItem item)
+    {
+        if (Helpers.MediaPathRepair.FindByLooseName(item.FilePath, item.FolderPath, item.CompletedAt) is not { } real) return false;
+        item.FilePath = real;
+        await SaveAsync();
+        return true;
     }
 
     public async Task AddAsync(DownloadHistoryItem item)

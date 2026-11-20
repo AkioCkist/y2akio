@@ -102,6 +102,7 @@ public sealed partial class HomePage : Page
         {
             foreach (var job in failed) AppendLog($"ERROR ({job.Title}): {job.Error}");
             ErrorBar.Message = failed.Count == 1 ? failed[0].Error : string.Format(L("Home.BatchFailed"), failed.Count, string.Join(", ", failed.Select(j => j.Title)));
+            ErrorBar.Title = L("Home.DownloadFailedTitle");
             ErrorBar.IsOpen = true;
         }
         UntrackJobs();

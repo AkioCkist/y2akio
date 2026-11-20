@@ -131,16 +131,12 @@ public sealed partial class DownloadsPage : Page
 
     private void OpenFile_Click(object sender, RoutedEventArgs e)
     {
-        if (JobOf(sender) is { } j && File.Exists(j.SavedPath))
-            _ = Windows.System.Launcher.LaunchUriAsync(new Uri(j.SavedPath));
+        if (JobOf(sender) is { } j) Helpers.ShellLauncher.OpenFile(j.SavedPath);
     }
 
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
     {
-        if (JobOf(sender) is not { } j) return;
-        var folder = File.Exists(j.SavedPath) ? Path.GetDirectoryName(j.SavedPath) : j.Request.SaveFolder;
-        if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
-            _ = Windows.System.Launcher.LaunchFolderPathAsync(folder);
+        if (JobOf(sender) is { } j) Helpers.ShellLauncher.ShowInFolder(j.SavedPath, j.Request.SaveFolder);
     }
 
     /// <summary>The "..." menu is built on open: per-job speed limit, copy link, remove.</summary>

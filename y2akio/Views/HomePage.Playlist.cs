@@ -68,6 +68,7 @@ public sealed partial class HomePage : Page
         {
             HidePreviewOnError();
             ErrorBar.Message = ex.Message;
+            ErrorBar.Title = L("Home.ErrorTitle");
             ErrorBar.IsOpen = true;
         }
         finally

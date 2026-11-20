@@ -523,6 +523,7 @@
                     <HyperlinkButton x:Name="ClearHistoryButton" Grid.Column="1" Content="Clear All" Click="ClearHistoryButton_Click" />
                 </Grid>
 
+                <ScrollViewer x:Name="HistoryScroller" VerticalScrollBarVisibility="Disabled" Padding="0,0,12,0">
                 <ItemsControl x:Name="HistoryList">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="models:DownloadHistoryItem">
@@ -562,6 +563,10 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                </ScrollViewer>
+
+                <HyperlinkButton x:Name="HistoryToggleButton" HorizontalAlignment="Center"
+                                 Visibility="Collapsed" Click="HistoryToggleButton_Click" />
             </StackPanel>
 
         </StackPanel>

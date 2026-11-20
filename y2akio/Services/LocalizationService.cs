@@ -99,6 +99,10 @@ public static class LocalizationService
         ["Home.GallerySaved"]       = D("{0} file(s) saved to {1}", "Đã lưu {0} file vào {1}"),
         ["Home.GalleryBusy"]        = D("Wait for the current gallery download to finish.", "Vui lòng đợi tải hiện tại hoàn tất."),
 
+        ["Home.DownloadFailedTitle"] = D("Download failed",   "Tải xuống thất bại"),
+        ["Home.ViewAll"]            = D("View all ({0})",     "Xem tất cả ({0})"),
+        ["Home.ShowLess"]           = D("Show less",          "Thu gọn"),
+        ["Home.FileMissingTitle"]   = D("File not found (moved or deleted)", "Không tìm thấy file (đã bị chuyển hoặc xóa)"),
         ["Home.SavedPrefix"]        = D("Saved:",             "Đã lưu:"),
         ["Home.BatchSaved"]         = D("{0} of {1} videos downloaded", "Đã tải {0}/{1} video"),
         ["Home.BatchFailed"]        = D("{0} download(s) failed: {1}", "{0} video tải lỗi: {1}"),

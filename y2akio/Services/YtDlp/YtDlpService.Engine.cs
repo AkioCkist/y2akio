@@ -233,7 +233,9 @@ public partial class YtDlpService
         foreach (var target in targets)
         {
             DownloadState.Delete(target);
-            if (finalPath is null) continue;
+            // Only delete leftovers when the final file is known to exist; otherwise the "leftover"
+            // might be the result itself.
+            if (finalPath is null || !File.Exists(finalPath)) continue;
             try
             {
                 if (File.Exists(target) && !string.Equals(Path.GetFullPath(target), Path.GetFullPath(finalPath), StringComparison.OrdinalIgnoreCase))

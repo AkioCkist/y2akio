@@ -67,7 +67,11 @@ public partial class YtDlpService
         var psi = new ProcessStartInfo
         {
             FileName = _ytDlpPath,
-            Arguments = arguments,
+            // yt-dlp prints in the ANSI code page (1252 on most machines) unless told otherwise, which
+            // silently drops emoji and Vietnamese letters from the file paths we parse ("Saved: ...").
+            Arguments = "--encoding utf-8 " + arguments,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             WorkingDirectory = workingDirectory ?? "",
             RedirectStandardOutput = true,
             RedirectStandardError = true,

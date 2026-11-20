@@ -23,5 +23,6 @@ This directory contains the user and contributor documentation for Y2Akio.
 | [Build and publish](build-and-publish.md) | Debug builds, release publishing, deployment layout, and startup diagnostics |
 | [Analyze optimization](analyze-optimization.md) | Rationale and state model for the fast YouTube analysis path |
 | [Download engine](download-engine-plan.md) | Design of the IDM-style segmented, resumable download engine and download manager |
+| [Mobile porting guide](mobile-porting-guide.md) | Every speed / download change, written platform-neutral for the phone version (Vietnamese) |
 
 Return to the [project README](../README.md).

@@ -299,6 +299,7 @@ public sealed partial class HomePage : Page
             AppendLog($"ERROR: {ex.Message}");
             GalleryStatusText.Text = ex.Message;
             ErrorBar.Message = ex.Message;
+            ErrorBar.Title = L("Home.DownloadFailedTitle");
             ErrorBar.IsOpen = true;
         }
         finally

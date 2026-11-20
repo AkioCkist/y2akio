@@ -37,6 +37,7 @@ public partial class YtDlpService
 
         // Files present before this download, so cleanup only touches what this run created.
         var priorFiles = SnapshotFileNames(req.SaveFolder);
+        var startedAt = DateTime.Now;
 
         void OnLine(string line)
         {
@@ -176,6 +177,10 @@ public partial class YtDlpService
 
         if (lastExitCode != 0)
             throw new InvalidOperationException(string.IsNullOrWhiteSpace(lastError) ? "Download failed." : lastError.Trim());
+
+        // The printed path can still be off (odd characters, a renamed post-processor output): make
+        // sure we report — and protect from cleanup — the file that really exists.
+        resolvedPath = Helpers.MediaPathRepair.ResolveOutput(resolvedPath, req.SaveFolder, priorFiles, startedAt);
 
         CleanupLeftoverFiles(req, priorFiles);
         CleanupEngineFiles(enginePartials, resolvedPath);

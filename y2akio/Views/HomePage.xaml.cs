@@ -46,7 +46,7 @@ public sealed partial class HomePage : Page
         _tikTok = new(_ytDlp.FetchPagesAsync);
         InitializeComponent();
 
-        HistoryList.ItemsSource = _history;
+        InitHistoryView();
         Unloaded += (_, _) => UntrackJobs();
 
         // Load default save folders from persisted settings
@@ -163,7 +163,7 @@ public sealed partial class HomePage : Page
         ClearLogButton.Content = L("Home.Clear");
 
         // History section
-        DownloadHistoryTitle.Text = L("Home.DownloadHistory");
+        UpdateHistoryLabels();
         ClearHistoryButton.Content = L("Home.ClearAll");
 
         // Playlist button
@@ -270,6 +270,7 @@ public sealed partial class HomePage : Page
         {
             HidePreviewOnError();
             ErrorBar.Message = ex.Message;
+            ErrorBar.Title = L("Home.ErrorTitle");
             ErrorBar.IsOpen = true;
         }
         finally

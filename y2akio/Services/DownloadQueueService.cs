@@ -545,7 +545,9 @@ public sealed class DownloadQueueService
                 job.Percent = r.Percent;
                 job.StatusText = status == DownloadJobStatus.Completed ? "" : r.StatusText;
                 job.Error = r.Error;
-                job.SavedPath = r.SavedPath;
+                job.SavedPath = status == DownloadJobStatus.Completed && !string.IsNullOrWhiteSpace(r.SavedPath) && !File.Exists(r.SavedPath)
+                    ? Helpers.MediaPathRepair.FindByLooseName(r.SavedPath, r.Request.SaveFolder, r.CompletedAt) ?? r.SavedPath
+                    : r.SavedPath;
                 job.CompletedAt = r.CompletedAt;
                 job.SpeedLimitKBps = r.SpeedLimitKBps;
                 Jobs.Add(job);
